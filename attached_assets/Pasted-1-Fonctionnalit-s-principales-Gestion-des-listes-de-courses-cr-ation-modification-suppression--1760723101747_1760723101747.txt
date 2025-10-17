@@ -1,0 +1,80 @@
+1. Fonctionnalités principales
+Gestion des listes de courses : création, modification, suppression, marquage d'articles (urgent, déjà acheté).
+
+Recherche et ajout intelligent d'articles : saisie en langage naturel interprétée (ex: "3 kg de pommes de terre").
+
+Gestion du panier et du paiement : ajout d'articles au panier, calcul des totaux, choix des moyens de paiement.
+
+Recommandations personnalisées : suggestions d'achats basées sur l'historique utilisateur.
+
+Gestion du catalogue produits et stock : CRUD produits, suivi des stocks, alertes de seuil bas.
+
+Authentification et profil utilisateur : création de compte, connexion et gestion des préférences.
+
+Synchronisation multi‑appareils : cohérence des listes et historiques entre mobile et web.
+
+2. Architecture globale
+Frontend React : interface utilisateur réactive, interaction avec API REST Django.
+
+Backend Django REST API : services métier, gestion base de données, API exposées.
+
+Base de données : stockage des utilisateurs, produits, listes, historique, etc.
+
+Module IA / Agent IA :
+
+Module indépendant ou intégré au backend (selon charge)
+
+Expose des API pour NLP (Analyse du texte libre), recommandations, suggestions.
+
+3. Diagramme de cas d'utilisation (Use Case)
+Acteurs :
+Utilisateur (Client)
+
+Système de paiement externe
+
+Agent IA
+
+Cas :
+Créer/Modifier/Supprimer liste
+
+Saisir article en langage naturel
+
+Recevoir suggestions
+
+Gérer panier et valider paiement
+
+Consulter historique
+
+Synchroniser liste
+
+4. Diagramme de classes simplifié
+Classe	Attributs clés	Relations principales
+Utilisateur	id, nom, email, motDePasseHashé, prefs	possede -> Listes, Historique
+Liste	id, titre, dateCreation, articles	appartientà -> Utilisateur, contient -> Article
+Article	id, nom, quantite, unite, statut	appartient à -> Liste, référence -> Produit
+Produit	id, nom, description, prix, stock, seuilAlerte	est utilisé par -> Article
+Panier	id, date, utilisateur, articlesPanier	lié à -> Utilisateur
+Paiement	id, type, statut, date, montant	lié à -> Panier, Système Paiement Externe
+AgentIA	(composant logiciel)	fournit NLP, Recommandations, Suggestions
+5. Attributs importants pour chaque classe
+Utilisateur : sécurité (hash du mot de passe), préférences langue,
+
+Article : état (urgent, acheté), quantité et unité parsés par l'agent IA,
+
+Produit : seuil d'alerte pour stock,
+
+Paiement : état de transaction (en attente, validé, annulé).
+
+6. Agents IA / Modèles adaptés
+NLP simple : modèles comme SpaCy, Hugging Face Transformers (bert-base-multilingual) pour parser le texte libre en entités structurées (quantité, produit, unité). Facile à intégrer via API Python.
+
+Système de recommandation collaboratif : basé sur l'historique d'achat, utilisant des bibliothèques comme Surprise ou implicit (modèles factorisation matricielle). Rapide à former sur petits jeux de données.
+
+Agent conversationnel léger (optionnel) : frameworks comme Rasa, Dialogflow pour une interface chatbot basique, si interaction vocale ou texte est souhaitée.
+
+Points clés pour l’implémentation
+Distinguer clairement les rôles backend (Django) et module IA.
+
+Exposer les APIs IA sous forme de microservices REST afin de rester modulaires.
+
+Choisir un NLP léger en première version pour démarrer rapidement.
