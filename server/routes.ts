@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { nlpAgent, recommendationAgent, chatbotAgent } from "./services/ai-agents";
+import { connectDB } from "./db";
 import type {
   NLPParseResult,
   RecommendationRequest,
@@ -10,164 +12,18 @@ import type {
 } from "@shared/schema";
 
 // ============================================================================
-// AI AGENT PLACEHOLDER FUNCTIONS
-// These are integration points for your custom AI implementations
+// AI AGENT INTEGRATION
+// Using the AI agent services with mock implementations
 // ============================================================================
-
-/**
- * NLP AGENT - Natural Language Parser
- * TODO: Replace with your AI implementation (spaCy, Hugging Face, OpenAI, etc.)
- * 
- * Example integration:
- * - Use spaCy for entity extraction
- * - Call OpenAI API for parsing
- * - Use regex patterns for simple parsing
- */
-async function parseNaturalLanguage(text: string, userId: string): Promise<NLPParseResult> {
-  // Placeholder implementation - replace with your NLP model
-  // This is a simple regex-based parser for demonstration
-  
-  const items: Array<{ name: string; quantity: number; unit: string }> = [];
-  
-  // Simple pattern matching (replace with actual NLP)
-  const patterns = [
-    /(\d+(?:\.\d+)?)\s*(kg|g|l|ml|liters?|kilograms?|grams?|pieces?|pcs|units?)\s+(?:of\s+)?(.+?)(?:,|$)/gi,
-    /(\d+(?:\.\d+)?)\s+(.+?)(?:,|$)/gi,
-  ];
-
-  let matched = false;
-  for (const pattern of patterns) {
-    const matches = Array.from(text.matchAll(pattern));
-    if (matches.length > 0) {
-      matched = true;
-      for (const match of matches) {
-        if (match[3]) {
-          // Pattern with unit
-          items.push({
-            quantity: parseFloat(match[1]),
-            unit: match[2].toLowerCase(),
-            name: match[3].trim(),
-          });
-        } else {
-          // Pattern without unit
-          items.push({
-            quantity: parseFloat(match[1]),
-            unit: "units",
-            name: match[2].trim(),
-          });
-        }
-      }
-      break;
-    }
-  }
-
-  // Log the NLP request for analytics
-  await storage.createNlpLog({
-    userId,
-    inputText: text,
-    parsedData: JSON.stringify(items),
-  });
-
-  return {
-    items,
-    confidence: matched ? 0.85 : 0.3,
-  };
-}
-
-/**
- * RECOMMENDATION AGENT
- * TODO: Replace with your recommendation algorithm
- * 
- * Example implementations:
- * - Collaborative filtering
- * - Content-based filtering
- * - Hybrid approach
- * - Rule-based recommendations
- */
-async function getRecommendations(userId: string, limit = 4): Promise<RecommendationResult> {
-  // Placeholder implementation - replace with your recommendation engine
-  
-  // Get user's order history
-  const orders = await storage.getUserOrders(userId);
-  const allProducts = await storage.getAllProducts();
-  
-  // Simple rule-based recommendation: popular products not recently ordered
-  const recentProductIds = new Set(
-    (await Promise.all(orders.slice(0, 3).map(o => storage.getOrderItems(o.id))))
-      .flat()
-      .map(item => item.productId)
-  );
-
-  const recommendations = allProducts
-    .filter(p => !recentProductIds.has(p.id) && p.stock > 0)
-    .slice(0, limit)
-    .map(p => ({
-      productId: p.id,
-      productName: p.name,
-      reason: "Popular product based on your shopping patterns",
-      confidence: 0.75,
-    }));
-
-  return { products: recommendations };
-}
-
-/**
- * CHATBOT AGENT
- * TODO: Replace with your chatbot implementation
- * 
- * Example integrations:
- * - OpenAI GPT API
- * - Anthropic Claude API
- * - Rasa framework
- * - Custom fine-tuned model
- */
-async function processChatbotMessage(request: ChatbotRequest): Promise<ChatbotResponse> {
-  // Placeholder implementation - replace with your chatbot AI
-  
-  const { userId, message } = request;
-  
-  // Save user message
-  await storage.createMessage({
-    userId,
-    content: message,
-    isBot: false,
-  });
-
-  // Simple rule-based responses (replace with actual AI)
-  let response = "I'm a placeholder chatbot. Replace me with your AI implementation!";
-  const suggestions: string[] = [];
-
-  const lowerMessage = message.toLowerCase();
-  
-  if (lowerMessage.includes("help") || lowerMessage.includes("how")) {
-    response = "I can help you with creating shopping lists, finding products, and placing orders. What would you like to know?";
-    suggestions.push("How do I create a list?", "How does NLP parsing work?", "How do I place an order?");
-  } else if (lowerMessage.includes("list")) {
-    response = "To create a shopping list, go to the Shopping Lists page and click 'New List'. You can add items using natural language like '3 kg apples'!";
-    suggestions.push("Show me products", "How do I add items?");
-  } else if (lowerMessage.includes("product")) {
-    response = "Browse our product catalog to see all available items. We also provide AI-powered recommendations based on your shopping history!";
-    suggestions.push("View my orders", "Get recommendations");
-  } else if (lowerMessage.includes("order")) {
-    response = "You can view all your past orders in the Orders page. Each order shows items, total amount, and payment status.";
-    suggestions.push("Create a new list", "Browse products");
-  }
-
-  // Save bot response
-  await storage.createMessage({
-    userId,
-    content: response,
-    isBot: true,
-  });
-
-  return { response, suggestions };
-}
 
 // ============================================================================
 // API ROUTES
 // ============================================================================
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Connect to MongoDB
+  await connectDB();
+
   // Mock user for demo (in production, use proper authentication)
   const MOCK_USER_ID = "demo-user-123";
 
@@ -306,7 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/nlp/parse", async (req, res) => {
     try {
       const { text } = req.body;
-      const result = await parseNaturalLanguage(text, MOCK_USER_ID);
+      const result = await nlpAgent.parseNaturalLanguage(text, MOCK_USER_ID);
       
       // Add parsed items to the list if provided
       const { listId } = req.body;
@@ -434,10 +290,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/recommendations", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
-      const recommendations = await getRecommendations(MOCK_USER_ID, limit);
+      const recommendations = await recommendationAgent.getPersonalizedRecommendations(MOCK_USER_ID, limit);
       res.json(recommendations);
     } catch (error) {
       res.status(500).json({ error: "Failed to get recommendations" });
+    }
+  });
+
+  // Get related products
+  app.get("/api/recommendations/related/:productId", async (req, res) => {
+    try {
+      const { productId } = req.params;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
+      const recommendations = await recommendationAgent.getRelatedProducts(productId, limit);
+      res.json(recommendations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get related products" });
+    }
+  });
+
+  // Get trending products
+  app.get("/api/recommendations/trending", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
+      const recommendations = await recommendationAgent.getTrendingProducts(limit);
+      res.json(recommendations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get trending products" });
     }
   });
 
@@ -469,10 +348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/chatbot/send", async (req, res) => {
     try {
       const { message } = req.body;
-      const response = await processChatbotMessage({
-        userId: MOCK_USER_ID,
-        message,
-      });
+      const response = await chatbotAgent.processMessage(MOCK_USER_ID, message);
       res.json(response);
     } catch (error) {
       res.status(500).json({ error: "Failed to process message" });

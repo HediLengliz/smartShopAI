@@ -1,303 +1,197 @@
-// Database schema for Smart Shopping List Application
-// Following the architecture from attached diagrams with proper relationships
+// TypeScript interfaces and schemas for Smart Shopping List Application
+// MongoDB/Mongoose types and AI agent interfaces
 
-import { sql, relations } from "drizzle-orm";
-import { 
-  pgTable, 
-  text, 
-  varchar, 
-  integer, 
-  real, 
-  timestamp, 
-  boolean 
-} from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // ============================================================================
-// PAIR 1: NLP Agent + Lists (User, List, ListItem, NLPLog)
+// MONGODB/MONGOOSE TYPES
 // ============================================================================
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// Base document interface
+export interface BaseDocument {
+  _id: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
-export const lists = pgTable("lists", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// User interface
+export interface User extends BaseDocument {
+  name: string;
+  email: string;
+}
 
-export const listItems = pgTable("list_items", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  listId: varchar("list_id").notNull().references(() => lists.id, { onDelete: "cascade" }),
-  productId: varchar("product_id").references(() => products.id),
-  name: text("name").notNull(),
-  quantity: real("quantity").notNull().default(1),
-  unit: text("unit").notNull().default("units"),
-  status: text("status").notNull().default("pending"), // pending, urgent, purchased
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// List interface
+export interface List extends BaseDocument {
+  userId: string;
+  title: string;
+}
 
-export const nlpLogs = pgTable("nlp_logs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  inputText: text("input_text").notNull(),
-  parsedData: text("parsed_data").notNull(), // JSON string of parsed entities
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-});
+// ListItem interface
+export interface ListItem extends BaseDocument {
+  listId: string;
+  productId?: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  status: 'pending' | 'urgent' | 'purchased';
+}
 
-// ============================================================================
-// PAIR 2: Recommendation Agent + Orders (Product, Order, OrderItem)
-// ============================================================================
+// Product interface
+export interface Product extends BaseDocument {
+  name: string;
+  description?: string;
+  price: number;
+  stock: number;
+  stockAlertThreshold: number;
+  category?: string;
+  imageUrl?: string;
+}
 
-export const products = pgTable("products", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  description: text("description"),
-  price: real("price").notNull(),
-  stock: integer("stock").notNull().default(0),
-  stockAlertThreshold: integer("stock_alert_threshold").notNull().default(10),
-  category: text("category"),
-  imageUrl: text("image_url"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// Order interface
+export interface Order extends BaseDocument {
+  userId: string;
+  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  totalAmount: number;
+}
 
-export const orders = pgTable("orders", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  status: text("status").notNull().default("pending"), // pending, processing, completed, cancelled
-  totalAmount: real("total_amount").notNull().default(0),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// OrderItem interface
+export interface OrderItem extends BaseDocument {
+  orderId: string;
+  productId: string;
+  quantity: number;
+  priceAtPurchase: number;
+}
 
-export const orderItems = pgTable("order_items", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  productId: varchar("product_id").notNull().references(() => products.id),
-  quantity: real("quantity").notNull(),
-  priceAtPurchase: real("price_at_purchase").notNull(),
-});
+// FAQ interface
+export interface FAQ extends BaseDocument {
+  question: string;
+  answer: string;
+  category?: string;
+}
 
-// ============================================================================
-// PAIR 3: Chatbot + Support (FAQ, Message, Feedback, Payment)
-// ============================================================================
+// Message interface
+export interface Message extends BaseDocument {
+  userId: string;
+  content: string;
+  isBot: boolean;
+  timestamp: Date;
+}
 
-export const faqs = pgTable("faqs", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  question: text("question").notNull(),
-  answer: text("answer").notNull(),
-  category: text("category"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// Feedback interface
+export interface Feedback extends BaseDocument {
+  userId: string;
+  content: string;
+  rating?: number;
+}
 
-export const messages = pgTable("messages", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  content: text("content").notNull(),
-  isBot: boolean("is_bot").notNull().default(false),
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-});
+// Payment interface
+export interface Payment extends BaseDocument {
+  orderId: string;
+  amount: number;
+  status: 'pending' | 'completed' | 'failed';
+  paymentMethod?: string;
+}
 
-export const feedback = pgTable("feedback", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  content: text("content").notNull(),
-  rating: integer("rating"), // 1-5 stars
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const payments = pgTable("payments", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  orderId: varchar("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  amount: real("amount").notNull(),
-  status: text("status").notNull().default("pending"), // pending, completed, failed
-  paymentMethod: text("payment_method"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+// NlpLog interface
+export interface NlpLog extends BaseDocument {
+  userId: string;
+  inputText: string;
+  parsedData: string; // JSON string
+  timestamp: Date;
+}
 
 // ============================================================================
-// RELATIONS (Explicit modeling as per Drizzle best practices)
+// CREATE DATA TYPES (for API requests)
 // ============================================================================
 
-export const usersRelations = relations(users, ({ many }) => ({
-  lists: many(lists),
-  orders: many(orders),
-  messages: many(messages),
-  feedback: many(feedback),
-  nlpLogs: many(nlpLogs),
-}));
-
-export const listsRelations = relations(lists, ({ one, many }) => ({
-  user: one(users, {
-    fields: [lists.userId],
-    references: [users.id],
-  }),
-  items: many(listItems),
-}));
-
-export const listItemsRelations = relations(listItems, ({ one }) => ({
-  list: one(lists, {
-    fields: [listItems.listId],
-    references: [lists.id],
-  }),
-  product: one(products, {
-    fields: [listItems.productId],
-    references: [products.id],
-  }),
-}));
-
-export const productsRelations = relations(products, ({ many }) => ({
-  listItems: many(listItems),
-  orderItems: many(orderItems),
-}));
-
-export const ordersRelations = relations(orders, ({ one, many }) => ({
-  user: one(users, {
-    fields: [orders.userId],
-    references: [users.id],
-  }),
-  items: many(orderItems),
-  payment: one(payments),
-}));
-
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
-  order: one(orders, {
-    fields: [orderItems.orderId],
-    references: [orders.id],
-  }),
-  product: one(products, {
-    fields: [orderItems.productId],
-    references: [products.id],
-  }),
-}));
-
-export const paymentsRelations = relations(payments, ({ one }) => ({
-  order: one(orders, {
-    fields: [payments.orderId],
-    references: [orders.id],
-  }),
-}));
-
-export const messagesRelations = relations(messages, ({ one }) => ({
-  user: one(users, {
-    fields: [messages.userId],
-    references: [users.id],
-  }),
-}));
-
-export const feedbackRelations = relations(feedback, ({ one }) => ({
-  user: one(users, {
-    fields: [feedback.userId],
-    references: [users.id],
-  }),
-}));
-
-export const nlpLogsRelations = relations(nlpLogs, ({ one }) => ({
-  user: one(users, {
-    fields: [nlpLogs.userId],
-    references: [users.id],
-  }),
-}));
+export type CreateUserData = Omit<User, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateListData = Omit<List, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateListItemData = Omit<ListItem, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateProductData = Omit<Product, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateOrderData = Omit<Order, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateOrderItemData = Omit<OrderItem, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateFAQData = Omit<FAQ, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateMessageData = Omit<Message, '_id' | 'createdAt' | 'updatedAt' | 'timestamp'>;
+export type CreateFeedbackData = Omit<Feedback, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreatePaymentData = Omit<Payment, '_id' | 'createdAt' | 'updatedAt'>;
+export type CreateNlpLogData = Omit<NlpLog, '_id' | 'createdAt' | 'updatedAt' | 'timestamp'>;
 
 // ============================================================================
-// INSERT SCHEMAS & TYPES
+// ZOD VALIDATION SCHEMAS
 // ============================================================================
 
-export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
-  createdAt: true,
+export const createUserSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name too long"),
+  email: z.string().email("Invalid email format"),
 });
 
-export const insertListSchema = createInsertSchema(lists).omit({
-  id: true,
-  createdAt: true,
+export const createListSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  title: z.string().min(1, "Title is required").max(200, "Title too long"),
 });
 
-export const insertListItemSchema = createInsertSchema(listItems).omit({
-  id: true,
-  createdAt: true,
+export const createListItemSchema = z.object({
+  listId: z.string().min(1, "List ID is required"),
+  productId: z.string().optional(),
+  name: z.string().min(1, "Name is required").max(200, "Name too long"),
+  quantity: z.number().min(0.01, "Quantity must be greater than 0"),
+  unit: z.string().min(1, "Unit is required").max(20, "Unit too long"),
+  status: z.enum(['pending', 'urgent', 'purchased']).default('pending'),
 });
 
-export const insertProductSchema = createInsertSchema(products).omit({
-  id: true,
-  createdAt: true,
+export const createProductSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200, "Name too long"),
+  description: z.string().max(1000, "Description too long").optional(),
+  price: z.number().min(0, "Price cannot be negative"),
+  stock: z.number().min(0, "Stock cannot be negative").default(0),
+  stockAlertThreshold: z.number().min(0, "Threshold cannot be negative").default(10),
+  category: z.string().max(50, "Category too long").optional(),
+  imageUrl: z.string().url("Invalid URL").max(500, "URL too long").optional(),
 });
 
-export const insertOrderSchema = createInsertSchema(orders).omit({
-  id: true,
-  createdAt: true,
+export const createOrderSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  status: z.enum(['pending', 'processing', 'completed', 'cancelled']).default('pending'),
+  totalAmount: z.number().min(0, "Amount cannot be negative").default(0),
 });
 
-export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
-  id: true,
+export const createOrderItemSchema = z.object({
+  orderId: z.string().min(1, "Order ID is required"),
+  productId: z.string().min(1, "Product ID is required"),
+  quantity: z.number().min(0.01, "Quantity must be greater than 0"),
+  priceAtPurchase: z.number().min(0, "Price cannot be negative"),
 });
 
-export const insertFaqSchema = createInsertSchema(faqs).omit({
-  id: true,
-  createdAt: true,
+export const createFAQSchema = z.object({
+  question: z.string().min(1, "Question is required").max(500, "Question too long"),
+  answer: z.string().min(1, "Answer is required").max(2000, "Answer too long"),
+  category: z.string().max(50, "Category too long").optional(),
 });
 
-export const insertMessageSchema = createInsertSchema(messages).omit({
-  id: true,
-  timestamp: true,
+export const createMessageSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  content: z.string().min(1, "Content is required").max(2000, "Content too long"),
+  isBot: z.boolean().default(false),
 });
 
-export const insertFeedbackSchema = createInsertSchema(feedback).omit({
-  id: true,
-  createdAt: true,
+export const createFeedbackSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  content: z.string().min(1, "Content is required").max(1000, "Content too long"),
+  rating: z.number().min(1).max(5).optional(),
 });
 
-export const insertPaymentSchema = createInsertSchema(payments).omit({
-  id: true,
-  createdAt: true,
+export const createPaymentSchema = z.object({
+  orderId: z.string().min(1, "Order ID is required"),
+  amount: z.number().min(0, "Amount cannot be negative"),
+  status: z.enum(['pending', 'completed', 'failed']).default('pending'),
+  paymentMethod: z.string().max(50, "Payment method too long").optional(),
 });
 
-export const insertNlpLogSchema = createInsertSchema(nlpLogs).omit({
-  id: true,
-  timestamp: true,
+export const createNlpLogSchema = z.object({
+  userId: z.string().min(1, "User ID is required"),
+  inputText: z.string().min(1, "Input text is required").max(1000, "Input text too long"),
+  parsedData: z.string().min(1, "Parsed data is required"),
 });
-
-// ============================================================================
-// TYPESCRIPT TYPES
-// ============================================================================
-
-export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-
-export type List = typeof lists.$inferSelect;
-export type InsertList = z.infer<typeof insertListSchema>;
-
-export type ListItem = typeof listItems.$inferSelect;
-export type InsertListItem = z.infer<typeof insertListItemSchema>;
-
-export type Product = typeof products.$inferSelect;
-export type InsertProduct = z.infer<typeof insertProductSchema>;
-
-export type Order = typeof orders.$inferSelect;
-export type InsertOrder = z.infer<typeof insertOrderSchema>;
-
-export type OrderItem = typeof orderItems.$inferSelect;
-export type InsertOrderItem = z.infer<typeof insertOrderItemSchema>;
-
-export type Faq = typeof faqs.$inferSelect;
-export type InsertFaq = z.infer<typeof insertFaqSchema>;
-
-export type Message = typeof messages.$inferSelect;
-export type InsertMessage = z.infer<typeof insertMessageSchema>;
-
-export type Feedback = typeof feedback.$inferSelect;
-export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
-
-export type Payment = typeof payments.$inferSelect;
-export type InsertPayment = z.infer<typeof insertPaymentSchema>;
-
-export type NlpLog = typeof nlpLogs.$inferSelect;
-export type InsertNlpLog = z.infer<typeof insertNlpLogSchema>;
 
 // ============================================================================
 // AI AGENT INTERFACES (for your custom implementation)
@@ -335,4 +229,172 @@ export interface ChatbotRequest {
 export interface ChatbotResponse {
   response: string;
   suggestions?: string[];
+}
+
+// ============================================================================
+// API REQUEST/RESPONSE TYPES
+// ============================================================================
+
+export interface CreateListRequest {
+  title: string;
+}
+
+export interface CreateListItemRequest {
+  name: string;
+  quantity?: number;
+  unit?: string;
+  productId?: string;
+}
+
+export interface CreateProductRequest {
+  name: string;
+  description?: string;
+  price: number;
+  stock?: number;
+  stockAlertThreshold?: number;
+  category?: string;
+  imageUrl?: string;
+}
+
+export interface CreateOrderRequest {
+  items: Array<{
+    productId: string;
+    quantity: number;
+  }>;
+  paymentMethod?: string;
+}
+
+export interface CreateMessageRequest {
+  content: string;
+}
+
+export interface CreateFeedbackRequest {
+  content: string;
+  rating?: number;
+}
+
+export interface NLPParseRequest {
+  text: string;
+  listId?: string;
+}
+
+export interface ChatbotSendRequest {
+  message: string;
+}
+
+// ============================================================================
+// ENHANCED RESPONSE TYPES WITH POPULATED DATA
+// ============================================================================
+
+export interface ListWithItems extends List {
+  items: ListItem[];
+  itemsCount: number;
+}
+
+export interface OrderWithItems extends Order {
+  items: Array<OrderItem & { product: Product }>;
+  payment?: Payment;
+}
+
+export interface ListItemWithProduct extends ListItem {
+  product?: Product;
+}
+
+export interface OrderItemWithProduct extends OrderItem {
+  product: Product;
+}
+
+// ============================================================================
+// PAGINATION AND FILTERING
+// ============================================================================
+
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface ProductFilters {
+  category?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  search?: string;
+}
+
+export interface ListFilters {
+  status?: 'pending' | 'urgent' | 'purchased';
+  search?: string;
+}
+
+export interface OrderFilters {
+  status?: 'pending' | 'processing' | 'completed' | 'cancelled';
+  dateFrom?: Date;
+  dateTo?: Date;
+}
+
+// ============================================================================
+// STATISTICS AND ANALYTICS
+// ============================================================================
+
+export interface UserStats {
+  totalLists: number;
+  totalItems: number;
+  totalOrders: number;
+  totalSpent: number;
+  averageOrderValue: number;
+  mostBoughtCategory: string;
+  recentActivity: Array<{
+    type: 'list_created' | 'item_added' | 'order_placed';
+    description: string;
+    timestamp: Date;
+  }>;
+}
+
+export interface ProductStats {
+  totalProducts: number;
+  lowStockProducts: number;
+  outOfStockProducts: number;
+  topCategories: Array<{
+    category: string;
+    count: number;
+  }>;
+  averagePrice: number;
+}
+
+// ============================================================================
+// ERROR TYPES
+// ============================================================================
+
+export interface APIError {
+  message: string;
+  code: string;
+  details?: any;
+}
+
+export interface ValidationError {
+  field: string;
+  message: string;
+  value?: any;
+}
+
+// ============================================================================
+// SEARCH AND FILTERING
+// ============================================================================
+
+export interface SearchResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export interface ProductSearchResult extends SearchResult<Product> {
+  categories: string[];
+  priceRange: {
+    min: number;
+    max: number;
+  };
 }

@@ -1,96 +1,97 @@
 // Storage layer for Smart Shopping List Application
-// Implements DatabaseStorage with PostgreSQL using Drizzle ORM
+// Implements DatabaseStorage with MongoDB using Mongoose ODM
 
-import { db } from "./db";
-import { eq, and, desc } from "drizzle-orm";
-import {
-  users,
-  lists,
-  listItems,
-  products,
-  orders,
-  orderItems,
-  faqs,
-  messages,
-  feedback,
-  payments,
-  nlpLogs,
-  type User,
-  type InsertUser,
-  type List,
-  type InsertList,
-  type ListItem,
-  type InsertListItem,
-  type Product,
-  type InsertProduct,
-  type Order,
-  type InsertOrder,
-  type OrderItem,
-  type InsertOrderItem,
-  type Faq,
-  type InsertFaq,
-  type Message,
-  type InsertMessage,
-  type Feedback,
-  type InsertFeedback,
-  type Payment,
-  type InsertPayment,
-  type NlpLog,
-  type InsertNlpLog,
-} from "@shared/schema";
+import { 
+  User, 
+  List, 
+  ListItem, 
+  Product, 
+  Order, 
+  OrderItem, 
+  FAQ, 
+  Message, 
+  Feedback, 
+  Payment, 
+  NlpLog,
+  type IUser,
+  type IList,
+  type IListItem,
+  type IProduct,
+  type IOrder,
+  type IOrderItem,
+  type IFAQ,
+  type IMessage,
+  type IFeedback,
+  type IPayment,
+  type INlpLog,
+  type CreateUserData,
+  type CreateListData,
+  type CreateListItemData,
+  type CreateProductData,
+  type CreateOrderData,
+  type CreateOrderItemData,
+  type CreateFAQData,
+  type CreateMessageData,
+  type CreateFeedbackData,
+  type CreatePaymentData,
+  type CreateNlpLogData
+} from "./models";
 
 export interface IStorage {
   // Users
-  getUser(id: string): Promise<User | undefined>;
-  getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getUser(id: string): Promise<IUser | undefined>;
+  getUserByEmail(email: string): Promise<IUser | undefined>;
+  createUser(user: CreateUserData): Promise<IUser>;
 
   // Lists
-  getUserLists(userId: string): Promise<List[]>;
-  getList(id: string): Promise<List | undefined>;
-  createList(list: InsertList): Promise<List>;
+  getUserLists(userId: string): Promise<IList[]>;
+  getList(id: string): Promise<IList | undefined>;
+  createList(list: CreateListData): Promise<IList>;
   deleteList(id: string): Promise<void>;
 
   // List Items
-  getListItems(listId: string): Promise<ListItem[]>;
-  getListItem(id: string): Promise<ListItem | undefined>;
-  createListItem(item: InsertListItem): Promise<ListItem>;
-  updateListItemStatus(id: string, status: string): Promise<ListItem | undefined>;
+  getListItems(listId: string): Promise<IListItem[]>;
+  getListItem(id: string): Promise<IListItem | undefined>;
+  createListItem(item: CreateListItemData): Promise<IListItem>;
+  updateListItemStatus(id: string, status: string): Promise<IListItem | undefined>;
   deleteListItem(id: string): Promise<void>;
 
   // Products
-  getAllProducts(): Promise<Product[]>;
-  getProduct(id: string): Promise<Product | undefined>;
-  createProduct(product: InsertProduct): Promise<Product>;
-  updateProductStock(id: string, stock: number): Promise<Product | undefined>;
+  getAllProducts(): Promise<IProduct[]>;
+  getProduct(id: string): Promise<IProduct | undefined>;
+  createProduct(product: CreateProductData): Promise<IProduct>;
+  updateProduct(id: string, data: Partial<CreateProductData>): Promise<IProduct | undefined>;
+  deleteProduct(id: string): Promise<void>;
 
   // Orders
-  getUserOrders(userId: string): Promise<Order[]>;
-  getOrder(id: string): Promise<Order | undefined>;
-  createOrder(order: InsertOrder): Promise<Order>;
-  updateOrderStatus(id: string, status: string): Promise<Order | undefined>;
+  getUserOrders(userId: string): Promise<IOrder[]>;
+  getOrder(id: string): Promise<IOrder | undefined>;
+  createOrder(order: CreateOrderData): Promise<IOrder>;
+  updateOrderStatus(id: string, status: string): Promise<IOrder | undefined>;
 
   // Order Items
-  getOrderItems(orderId: string): Promise<OrderItem[]>;
-  createOrderItem(item: InsertOrderItem): Promise<OrderItem>;
+  getOrderItems(orderId: string): Promise<IOrderItem[]>;
+  createOrderItem(item: CreateOrderItemData): Promise<IOrderItem>;
 
   // FAQs
-  getAllFaqs(): Promise<Faq[]>;
-  createFaq(faq: InsertFaq): Promise<Faq>;
+  getAllFaqs(): Promise<IFAQ[]>;
+  createFaq(faq: CreateFAQData): Promise<IFAQ>;
 
   // Messages
-  getUserMessages(userId: string): Promise<Message[]>;
-  createMessage(message: InsertMessage): Promise<Message>;
+  getUserMessages(userId: string): Promise<IMessage[]>;
+  createMessage(message: CreateMessageData): Promise<IMessage>;
 
   // Feedback
-  createFeedback(feedbackData: InsertFeedback): Promise<Feedback>;
+  createFeedback(feedbackData: CreateFeedbackData): Promise<IFeedback>;
 
   // Payments
-  createPayment(payment: InsertPayment): Promise<Payment>;
-  getPaymentByOrderId(orderId: string): Promise<Payment | undefined>;
+  createPayment(payment: CreatePaymentData): Promise<IPayment>;
+  getPaymentByOrderId(orderId: string): Promise<IPayment | undefined>;
+  updatePaymentStatus(paymentId: string, status: string): Promise<IPayment | undefined>;
 
   // NLP Logs
-  createNlpLog(log: InsertNlpLog): Promise<NlpLog>;
+  createNlpLog(log: CreateNlpLogData): Promise<INlpLog>;
+  getNlpLogs(userId: string): Promise<INlpLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -98,18 +99,17 @@ export class DatabaseStorage implements IStorage {
   // USERS
   // ============================================================================
   
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+  async getUser(id: string): Promise<IUser | undefined> {
+    return await User.findById(id).lean();
   }
 
-  async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
-    return user || undefined;
+  async getUserByEmail(email: string): Promise<IUser | undefined> {
+    return await User.findOne({ email }).lean();
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
+  async createUser(insertUser: CreateUserData): Promise<IUser> {
+    const user = new User(insertUser);
+    await user.save();
     return user;
   }
 
@@ -117,144 +117,140 @@ export class DatabaseStorage implements IStorage {
   // LISTS
   // ============================================================================
 
-  async getUserLists(userId: string): Promise<List[]> {
-    return await db
-      .select()
-      .from(lists)
-      .where(eq(lists.userId, userId))
-      .orderBy(desc(lists.createdAt));
+  async getUserLists(userId: string): Promise<IList[]> {
+    return await List.find({ userId }).sort({ createdAt: -1 }).lean();
   }
 
-  async getList(id: string): Promise<List | undefined> {
-    const [list] = await db.select().from(lists).where(eq(lists.id, id));
-    return list || undefined;
+  async getList(id: string): Promise<IList | undefined> {
+    return await List.findById(id).lean();
   }
 
-  async createList(insertList: InsertList): Promise<List> {
-    const [list] = await db.insert(lists).values(insertList).returning();
+  async createList(insertList: CreateListData): Promise<IList> {
+    const list = new List(insertList);
+    await list.save();
     return list;
   }
 
   async deleteList(id: string): Promise<void> {
-    await db.delete(lists).where(eq(lists.id, id));
+    // Also delete all list items
+    await ListItem.deleteMany({ listId: id });
+    await List.findByIdAndDelete(id);
   }
 
   // ============================================================================
   // LIST ITEMS
   // ============================================================================
 
-  async getListItems(listId: string): Promise<ListItem[]> {
-    return await db
-      .select()
-      .from(listItems)
-      .where(eq(listItems.listId, listId))
-      .orderBy(desc(listItems.createdAt));
+  async getListItems(listId: string): Promise<IListItem[]> {
+    return await ListItem.find({ listId })
+      .populate('productId', 'name price imageUrl')
+      .sort({ createdAt: -1 })
+      .lean();
   }
 
-  async getListItem(id: string): Promise<ListItem | undefined> {
-    const [item] = await db.select().from(listItems).where(eq(listItems.id, id));
-    return item || undefined;
+  async getListItem(id: string): Promise<IListItem | undefined> {
+    return await ListItem.findById(id)
+      .populate('productId', 'name price imageUrl')
+      .lean();
   }
 
-  async createListItem(insertItem: InsertListItem): Promise<ListItem> {
-    const [item] = await db.insert(listItems).values(insertItem).returning();
-    return item;
+  async createListItem(insertItem: CreateListItemData): Promise<IListItem> {
+    const item = new ListItem(insertItem);
+    await item.save();
+    return await ListItem.findById(item._id)
+      .populate('productId', 'name price imageUrl')
+      .lean();
   }
 
-  async updateListItemStatus(id: string, status: string): Promise<ListItem | undefined> {
-    const [item] = await db
-      .update(listItems)
-      .set({ status })
-      .where(eq(listItems.id, id))
-      .returning();
-    return item || undefined;
+  async updateListItemStatus(id: string, status: string): Promise<IListItem | undefined> {
+    return await ListItem.findByIdAndUpdate(
+      id, 
+      { status }, 
+      { new: true }
+    ).populate('productId', 'name price imageUrl').lean();
   }
 
   async deleteListItem(id: string): Promise<void> {
-    await db.delete(listItems).where(eq(listItems.id, id));
+    await ListItem.findByIdAndDelete(id);
   }
 
   // ============================================================================
   // PRODUCTS
   // ============================================================================
 
-  async getAllProducts(): Promise<Product[]> {
-    return await db.select().from(products).orderBy(desc(products.createdAt));
+  async getAllProducts(): Promise<IProduct[]> {
+    return await Product.find().sort({ createdAt: -1 }).lean();
   }
 
-  async getProduct(id: string): Promise<Product | undefined> {
-    const [product] = await db.select().from(products).where(eq(products.id, id));
-    return product || undefined;
+  async getProduct(id: string): Promise<IProduct | undefined> {
+    return await Product.findById(id).lean();
   }
 
-  async createProduct(insertProduct: InsertProduct): Promise<Product> {
-    const [product] = await db.insert(products).values(insertProduct).returning();
+  async createProduct(insertProduct: CreateProductData): Promise<IProduct> {
+    const product = new Product(insertProduct);
+    await product.save();
     return product;
   }
 
-  async updateProductStock(id: string, stock: number): Promise<Product | undefined> {
-    const [product] = await db
-      .update(products)
-      .set({ stock })
-      .where(eq(products.id, id))
-      .returning();
-    return product || undefined;
+  async updateProduct(id: string, data: Partial<CreateProductData>): Promise<IProduct | undefined> {
+    return await Product.findByIdAndUpdate(id, data, { new: true }).lean();
+  }
+
+  async deleteProduct(id: string): Promise<void> {
+    await Product.findByIdAndDelete(id);
   }
 
   // ============================================================================
   // ORDERS
   // ============================================================================
 
-  async getUserOrders(userId: string): Promise<Order[]> {
-    return await db
-      .select()
-      .from(orders)
-      .where(eq(orders.userId, userId))
-      .orderBy(desc(orders.createdAt));
+  async getUserOrders(userId: string): Promise<IOrder[]> {
+    return await Order.find({ userId }).sort({ createdAt: -1 }).lean();
   }
 
-  async getOrder(id: string): Promise<Order | undefined> {
-    const [order] = await db.select().from(orders).where(eq(orders.id, id));
-    return order || undefined;
+  async getOrder(id: string): Promise<IOrder | undefined> {
+    return await Order.findById(id).lean();
   }
 
-  async createOrder(insertOrder: InsertOrder): Promise<Order> {
-    const [order] = await db.insert(orders).values(insertOrder).returning();
+  async createOrder(insertOrder: CreateOrderData): Promise<IOrder> {
+    const order = new Order(insertOrder);
+    await order.save();
     return order;
   }
 
-  async updateOrderStatus(id: string, status: string): Promise<Order | undefined> {
-    const [order] = await db
-      .update(orders)
-      .set({ status })
-      .where(eq(orders.id, id))
-      .returning();
-    return order || undefined;
+  async updateOrderStatus(id: string, status: string): Promise<IOrder | undefined> {
+    return await Order.findByIdAndUpdate(id, { status }, { new: true }).lean();
   }
 
   // ============================================================================
   // ORDER ITEMS
   // ============================================================================
 
-  async getOrderItems(orderId: string): Promise<OrderItem[]> {
-    return await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  async getOrderItems(orderId: string): Promise<IOrderItem[]> {
+    return await OrderItem.find({ orderId })
+      .populate('productId', 'name price imageUrl')
+      .lean();
   }
 
-  async createOrderItem(insertItem: InsertOrderItem): Promise<OrderItem> {
-    const [item] = await db.insert(orderItems).values(insertItem).returning();
-    return item;
+  async createOrderItem(insertItem: CreateOrderItemData): Promise<IOrderItem> {
+    const item = new OrderItem(insertItem);
+    await item.save();
+    return await OrderItem.findById(item._id)
+      .populate('productId', 'name price imageUrl')
+      .lean();
   }
 
   // ============================================================================
   // FAQs
   // ============================================================================
 
-  async getAllFaqs(): Promise<Faq[]> {
-    return await db.select().from(faqs).orderBy(desc(faqs.createdAt));
+  async getAllFaqs(): Promise<IFAQ[]> {
+    return await FAQ.find().sort({ createdAt: -1 }).lean();
   }
 
-  async createFaq(insertFaq: InsertFaq): Promise<Faq> {
-    const [faq] = await db.insert(faqs).values(insertFaq).returning();
+  async createFaq(insertFaq: CreateFAQData): Promise<IFAQ> {
+    const faq = new FAQ(insertFaq);
+    await faq.save();
     return faq;
   }
 
@@ -262,16 +258,13 @@ export class DatabaseStorage implements IStorage {
   // MESSAGES
   // ============================================================================
 
-  async getUserMessages(userId: string): Promise<Message[]> {
-    return await db
-      .select()
-      .from(messages)
-      .where(eq(messages.userId, userId))
-      .orderBy(messages.timestamp);
+  async getUserMessages(userId: string): Promise<IMessage[]> {
+    return await Message.find({ userId }).sort({ timestamp: -1 }).lean();
   }
 
-  async createMessage(insertMessage: InsertMessage): Promise<Message> {
-    const [message] = await db.insert(messages).values(insertMessage).returning();
+  async createMessage(insertMessage: CreateMessageData): Promise<IMessage> {
+    const message = new Message(insertMessage);
+    await message.save();
     return message;
   }
 
@@ -279,32 +272,46 @@ export class DatabaseStorage implements IStorage {
   // FEEDBACK
   // ============================================================================
 
-  async createFeedback(insertFeedback: InsertFeedback): Promise<Feedback> {
-    const [feedbackRecord] = await db.insert(feedback).values(insertFeedback).returning();
-    return feedbackRecord;
+  async createFeedback(insertFeedback: CreateFeedbackData): Promise<IFeedback> {
+    const feedback = new Feedback(insertFeedback);
+    await feedback.save();
+    return feedback;
   }
 
   // ============================================================================
   // PAYMENTS
   // ============================================================================
 
-  async createPayment(insertPayment: InsertPayment): Promise<Payment> {
-    const [payment] = await db.insert(payments).values(insertPayment).returning();
+  async createPayment(insertPayment: CreatePaymentData): Promise<IPayment> {
+    const payment = new Payment(insertPayment);
+    await payment.save();
     return payment;
   }
 
-  async getPaymentByOrderId(orderId: string): Promise<Payment | undefined> {
-    const [payment] = await db.select().from(payments).where(eq(payments.orderId, orderId));
-    return payment || undefined;
+  async getPaymentByOrderId(orderId: string): Promise<IPayment | undefined> {
+    return await Payment.findOne({ orderId }).lean();
+  }
+
+  async updatePaymentStatus(paymentId: string, status: string): Promise<IPayment | undefined> {
+    return await Payment.findByIdAndUpdate(
+      paymentId, 
+      { status }, 
+      { new: true }
+    ).lean();
   }
 
   // ============================================================================
   // NLP LOGS
   // ============================================================================
 
-  async createNlpLog(insertLog: InsertNlpLog): Promise<NlpLog> {
-    const [log] = await db.insert(nlpLogs).values(insertLog).returning();
+  async createNlpLog(insertLog: CreateNlpLogData): Promise<INlpLog> {
+    const log = new NlpLog(insertLog);
+    await log.save();
     return log;
+  }
+
+  async getNlpLogs(userId: string): Promise<INlpLog[]> {
+    return await NlpLog.find({ userId }).sort({ timestamp: -1 }).lean();
   }
 }
 
