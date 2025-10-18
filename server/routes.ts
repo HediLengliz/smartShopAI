@@ -1,15 +1,38 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { nlpAgent, recommendationAgent, chatbotAgent } from "./services/ai-agents";
+import {
+  nlpAgent,
+  recommendationAgent,
+  chatbotAgent,
+} from "./services/ai-agents";
 import { connectDB } from "./db";
+import { Types } from "mongoose";
 import type {
   NLPParseResult,
   RecommendationRequest,
   RecommendationResult,
   ChatbotRequest,
   ChatbotResponse,
+  ensureStringId,
 } from "@shared/schema";
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+// Transform MongoDB documents to use 'id' instead of '_id' for frontend compatibility
+function transformDocument<T extends { _id?: any }>(
+  doc: T | null | undefined,
+): any {
+  if (!doc) return doc;
+  const { _id, ...rest } = doc as any;
+  return { ...rest, id: _id.toString() };
+}
+
+function transformDocuments<T extends { _id?: any }>(docs: T[]): any[] {
+  return docs.map(transformDocument);
+}
 
 // ============================================================================
 // AI AGENT INTEGRATION
@@ -34,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createUser({
         name: "Demo User",
         email: "demo@example.com",
-      });
+      } as any);
     }
     next();
   });
@@ -47,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/lists", async (req, res) => {
     try {
       const lists = await storage.getUserLists(MOCK_USER_ID);
-      res.json(lists);
+      res.json(transformDocuments(lists));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch lists" });
     }
@@ -57,8 +80,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/lists", async (req, res) => {
     try {
       const { title } = req.body;
-      const list = await storage.createList({ userId: MOCK_USER_ID, title });
-      res.json(list);
+      const list = await storage.createList({
+        userId: MOCK_USER_ID as any,
+        title,
+      });
+      res.json(transformDocument(list));
     } catch (error) {
       res.status(500).json({ error: "Failed to create list" });
     }
@@ -71,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!list) {
         return res.status(404).json({ error: "List not found" });
       }
-      res.json(list);
+      res.json(transformDocument(list));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch list" });
     }
@@ -91,7 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/lists/:id/items", async (req, res) => {
     try {
       const items = await storage.getListItems(req.params.id);
-      res.json(items);
+      res.json(transformDocuments(items));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch items" });
     }
@@ -102,14 +128,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { name, quantity, unit, productId } = req.body;
       const item = await storage.createListItem({
-        listId: req.params.id,
+        listId: req.params.id as any,
         name,
         quantity: quantity || 1,
         unit: unit || "units",
-        productId: productId || null,
+        productId: productId || undefined,
         status: "pending",
       });
-      res.json(item);
+      res.json(transformDocument(item));
     } catch (error) {
       res.status(500).json({ error: "Failed to add item" });
     }
@@ -124,14 +150,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Product not found" });
       }
       const item = await storage.createListItem({
-        listId: req.params.id,
+        listId: req.params.id as any,
         name: product.name,
         quantity: 1,
         unit: "units",
-        productId: product.id,
+        productId: product._id as any,
         status: "pending",
       });
-      res.json(item);
+      res.json(transformDocument(item));
     } catch (error) {
       res.status(500).json({ error: "Failed to add product to list" });
     }
@@ -141,8 +167,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/lists/:id/items/:itemId", async (req, res) => {
     try {
       const { status } = req.body;
-      const item = await storage.updateListItemStatus(req.params.itemId, status);
-      res.json(item);
+      const item = await storage.updateListItemStatus(
+        req.params.itemId,
+        status,
+      );
+      res.json(transformDocument(item));
     } catch (error) {
       res.status(500).json({ error: "Failed to update item" });
     }
@@ -163,13 +192,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { text } = req.body;
       const result = await nlpAgent.parseNaturalLanguage(text, MOCK_USER_ID);
-      
+
       // Add parsed items to the list if provided
       const { listId } = req.body;
       if (listId && result.items.length > 0) {
         for (const item of result.items) {
           await storage.createListItem({
-            listId,
+            listId: listId as any,
             name: item.name,
             quantity: item.quantity,
             unit: item.unit,
@@ -177,7 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
-      
+
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to parse text" });
@@ -192,7 +221,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/products", async (req, res) => {
     try {
       const products = await storage.getAllProducts();
-      res.json(products);
+      res.json(transformDocuments(products));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch products" });
     }
@@ -202,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/products", async (req, res) => {
     try {
       const product = await storage.createProduct(req.body);
-      res.json(product);
+      res.json(transformDocument(product));
     } catch (error) {
       res.status(500).json({ error: "Failed to create product" });
     }
@@ -212,26 +241,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/orders", async (req, res) => {
     try {
       const orders = await storage.getUserOrders(MOCK_USER_ID);
-      
+
       // Fetch items and payment for each order
       const ordersWithDetails = await Promise.all(
         orders.map(async (order) => {
-          const items = await storage.getOrderItems(order.id);
+          const items = await storage.getOrderItems(order._id.toString());
           const itemsWithProducts = await Promise.all(
-            items.map(async (item) => ({
-              ...item,
-              product: await storage.getProduct(item.productId),
-            }))
+            items.map(async (item: any) => ({
+              ...transformDocument(item),
+              product: transformDocument(
+                await storage.getProduct(item.productId.toString()),
+              ),
+            })),
           );
-          const payment = await storage.getPaymentByOrderId(order.id);
-          return {
+          const payment = await storage.getPaymentByOrderId(
+            order._id.toString(),
+          );
+          return transformDocument({
             ...order,
             items: itemsWithProducts,
-            payment,
-          };
-        })
+            payment: transformDocument(payment),
+          });
+        }),
       );
-      
+
       res.json(ordersWithDetails);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch orders" });
@@ -242,7 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/orders", async (req, res) => {
     try {
       const { items, paymentMethod } = req.body;
-      
+
       // Calculate total
       let totalAmount = 0;
       for (const item of items) {
@@ -251,36 +284,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalAmount += product.price * item.quantity;
         }
       }
-      
+
       // Create order
       const order = await storage.createOrder({
-        userId: MOCK_USER_ID,
+        userId: MOCK_USER_ID as any,
         status: "pending",
         totalAmount,
       });
-      
+
       // Create order items
       for (const item of items) {
         const product = await storage.getProduct(item.productId);
         if (product) {
           await storage.createOrderItem({
-            orderId: order.id,
-            productId: item.productId,
+            orderId: order.id as any,
+            productId: item.productId as any,
             quantity: item.quantity,
             priceAtPurchase: product.price,
           });
         }
       }
-      
+
       // Create payment
       await storage.createPayment({
-        orderId: order.id,
+        orderId: order.id as any,
         amount: totalAmount,
         status: "pending",
         paymentMethod,
       });
-      
-      res.json(order);
+
+      res.json(transformDocument(order));
     } catch (error) {
       res.status(500).json({ error: "Failed to create order" });
     }
@@ -290,7 +323,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/recommendations", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
-      const recommendations = await recommendationAgent.getPersonalizedRecommendations(MOCK_USER_ID, limit);
+      const recommendations =
+        await recommendationAgent.getPersonalizedRecommendations(
+          MOCK_USER_ID,
+          limit,
+        );
       res.json(recommendations);
     } catch (error) {
       res.status(500).json({ error: "Failed to get recommendations" });
@@ -302,7 +339,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { productId } = req.params;
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
-      const recommendations = await recommendationAgent.getRelatedProducts(productId, limit);
+      const recommendations = await recommendationAgent.getRelatedProducts(
+        productId,
+        limit,
+      );
       res.json(recommendations);
     } catch (error) {
       res.status(500).json({ error: "Failed to get related products" });
@@ -313,7 +353,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/recommendations/trending", async (req, res) => {
     try {
       const limit = req.query.limit ? parseInt(req.query.limit as string) : 4;
-      const recommendations = await recommendationAgent.getTrendingProducts(limit);
+      const recommendations =
+        await recommendationAgent.getTrendingProducts(limit);
       res.json(recommendations);
     } catch (error) {
       res.status(500).json({ error: "Failed to get trending products" });
@@ -328,7 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/faq", async (req, res) => {
     try {
       const faqs = await storage.getAllFaqs();
-      res.json(faqs);
+      res.json(transformDocuments(faqs));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch FAQs" });
     }
@@ -338,7 +379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/faq", async (req, res) => {
     try {
       const faq = await storage.createFaq(req.body);
-      res.json(faq);
+      res.json(transformDocument(faq));
     } catch (error) {
       res.status(500).json({ error: "Failed to create FAQ" });
     }
@@ -359,7 +400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/chatbot/messages", async (req, res) => {
     try {
       const messages = await storage.getUserMessages(MOCK_USER_ID);
-      res.json(messages);
+      res.json(transformDocuments(messages));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch messages" });
     }
@@ -370,11 +411,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { content, rating } = req.body;
       const feedbackRecord = await storage.createFeedback({
-        userId: MOCK_USER_ID,
+        userId: MOCK_USER_ID as any,
         content,
-        rating: rating || null,
+        rating: rating || undefined,
       });
-      res.json(feedbackRecord);
+      res.json(transformDocument(feedbackRecord));
     } catch (error) {
       res.status(500).json({ error: "Failed to submit feedback" });
     }
@@ -384,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/payments", async (req, res) => {
     try {
       const payment = await storage.createPayment(req.body);
-      res.json(payment);
+      res.json(transformDocument(payment));
     } catch (error) {
       res.status(500).json({ error: "Failed to process payment" });
     }
