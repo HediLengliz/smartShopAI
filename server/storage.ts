@@ -88,6 +88,7 @@ export interface IStorage {
   // Messages
   getUserMessages(userId: string): Promise<IMessage[]>;
   createMessage(message: CreateMessageData): Promise<IMessage>;
+  clearUserMessages(userId: string): Promise<void>;
 
   // Feedback
   createFeedback(feedbackData: CreateFeedbackData): Promise<IFeedback>;
@@ -314,6 +315,10 @@ export class DatabaseStorage implements IStorage {
     const message = new Message(insertMessage);
     await message.save();
     return message;
+  }
+
+  async clearUserMessages(userId: string): Promise<void> {
+    await Message.deleteMany({ userId });
   }
 
   // ============================================================================

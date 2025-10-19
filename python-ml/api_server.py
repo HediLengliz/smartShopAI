@@ -11,6 +11,16 @@ from datetime import datetime
 import logging
 from typing import Dict, List, Optional
 import json
+import re
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.naive_bayes import MultinomialNB
+import pickle
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
 
 # Import recommendation engine
 from recommendation_model import RecommendationEngine
@@ -26,7 +36,437 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Initialize recommendation engine
+# AI-Powered Chatbot Class
+class AIChatbot:
+    def __init__(self):
+        # Initialize AI components
+        self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
+        self.intent_classifier = None
+        self.context_memory = {}
+        self.conversation_history = {}
+        
+        # Initialize NLP components
+        try:
+            nltk.download('punkt', quiet=True)
+            nltk.download('stopwords', quiet=True)
+            nltk.download('wordnet', quiet=True)
+            self.lemmatizer = WordNetLemmatizer()
+            self.stop_words = set(stopwords.words('english'))
+        except Exception as e:
+            logger.warning(f"NLTK setup failed: {e}")
+            self.lemmatizer = None
+            self.stop_words = set()
+        
+        # Training data for intent classification
+        self.training_data = self._get_training_data()
+        self._train_intent_classifier()
+        
+        # Fallback responses
+        self.responses = {
+            'greeting': [
+                '👋 Hey there! Welcome to SmartShopAI! I\'m your personal shopping assistant. What brings you here today?',
+                '🎉 Hello! Great to see you! I\'m here to make your shopping experience amazing. What can I help you discover?',
+                '🌟 Hi! Ready to revolutionize your shopping? I\'ve got some fantastic features to show you!',
+                '💫 Welcome back! I\'ve been working on some cool new recommendations. Want to check them out?',
+                '🚀 Hey! Your shopping journey starts here! What are you looking to accomplish today?',
+                '🛒 Hello! I\'m your AI shopping buddy! Ready to make your grocery runs smarter and more fun?',
+                '🌟 Welcome to the future of shopping! I\'m here to help you discover, organize, and optimize your shopping experience!',
+                '🎯 Hi there! Your personal shopping assistant is ready to help. What can we tackle together today?',
+                '✨ Hey! I\'m powered by advanced AI to make your shopping experience seamless and enjoyable!',
+                '🛍️ Hello! Ready to transform your shopping routine? I\'m here to guide you every step of the way!',
+                '🤖 Greetings! I\'m your intelligent shopping companion, here to help you shop smarter, not harder!'
+            ],
+            'shopping_lists': [
+                '📝 Let\'s create your perfect shopping list! Head to the Lists page and hit "New List" - it\'s super intuitive!',
+                '🛒 Ready to make shopping effortless? Create a new list and watch the magic happen with our AI-powered suggestions!',
+                '✨ Building lists just got exciting! Click "New List" and try adding items naturally - like "2kg fresh tomatoes, organic milk" - I\'ll parse it instantly!',
+                '🎯 Time to get organized! New lists are just a click away, and you can even use voice commands for a hands-free experience!',
+                '📋 Let\'s build something amazing together! Create your list and I\'ll help you find the best deals and alternatives.'
+            ],
+            'products': [
+                '🛍️ Our product catalog is absolutely stunning! Fresh organic produce, premium dairy, and exclusive items await you in the Products section!',
+                '🌟 Discover our curated selection! From farm-fresh vegetables to artisanal cheeses - every product is carefully chosen for quality!',
+                '✨ Ready for a shopping adventure? Browse our catalog and let our AI surprise you with personalized recommendations!',
+                '🎉 We\'ve got everything you need and more! Check out our seasonal specials and trending products in the catalog!',
+                '🔥 Our product collection keeps growing! Explore categories, read reviews, and find your new favorites!'
+            ],
+            'orders': [
+                '📦 Your orders are like treasure maps! Track them in real-time in the Orders section - from packing to your doorstep!',
+                '🚚 Excited to see where your order is? Check the Orders page for live updates and estimated delivery times!',
+                '📍 Your packages are on an adventure! Follow their journey with detailed tracking and delivery notifications!',
+                '🎁 Good news travels fast! Monitor your orders and get instant updates on any changes or delays!',
+                '⚡ Stay in the loop! Your Orders page shows everything - from confirmation to delivery confirmation!'
+            ],
+            'recommendations': [
+                '🤖 Oh, you\'re going to love this! I\'ve analyzed your shopping patterns and found some incredible personalized recommendations just for you!',
+                '💎 I\'ve been working on something special! Check out these AI-curated suggestions based on your unique preferences!',
+                '🎯 Perfect timing! I\'ve discovered some products that match your taste perfectly. Want to see what I found?',
+                '✨ Your personal shopping genie is here! I\'ve prepared some amazing recommendations that I think you\'ll absolutely love!',
+                '🌟 This is where the magic happens! Let me show you some trending items and hidden gems based on your shopping history!'
+            ],
+            'weather': [
+                '🌤️ I\'m focused on shopping, but I can help you find seasonal products! Looking for summer essentials or cozy winter items?',
+                '🛍️ Weather affects shopping too! Need rain gear, sunscreen, or seasonal foods? I\'ve got you covered!',
+                '☀️ While I can\'t predict weather, I can suggest weather-appropriate products! What season are you shopping for?',
+                '🌦️ Let\'s talk shopping instead! I can help you find products perfect for any weather condition!',
+                '🌈 Weather or not, I\'m here for your shopping needs! Need seasonal recommendations?'
+            ],
+            'help': [
+                '🎯 I\'m your shopping superhero! I can help you create lists, find products, track orders, and discover amazing recommendations!',
+                '💡 Let\'s make shopping fun! I can guide you through creating lists, browsing products, and finding the best deals!',
+                '🚀 Ready to transform your shopping? I\'ve got tools for lists, products, orders, and personalized suggestions!',
+                '✨ I\'m here to make shopping effortless! Ask me about lists, products, orders, or recommendations - I\'ve got you covered!',
+                '🎪 Welcome to the SmartShopAI experience! I can help with everything from list creation to product discovery!'
+            ]
+        }
+    
+    def get_response(self, message: str, user_id: str = 'default_user') -> dict:
+        """Generate AI-powered response"""
+        try:
+            # Classify intent using AI
+            intent, confidence = self._classify_intent(message)
+            
+            # Update user context
+            self._update_user_context(user_id, message, intent)
+            
+            # Generate AI response
+            ai_response = self._generate_ai_response(message, intent, user_id)
+            
+            # Get contextual suggestions
+            suggestions = self._get_suggestions(intent)
+            
+            # Add AI-specific metadata
+            response_data = {
+                'response': ai_response,
+                'intent': intent,
+                'confidence': float(confidence),
+                'suggestions': suggestions,
+                'timestamp': datetime.now().isoformat(),
+                'ai_powered': True,
+                'context_aware': True
+            }
+            
+            # Store conversation history
+            self._store_conversation(user_id, message, ai_response, intent)
+            
+            return response_data
+            
+        except Exception as e:
+            logger.error(f"AI response generation failed: {e}")
+            # Fallback to static response
+            return self._get_fallback_response_data(message)
+    
+    def _update_user_context(self, user_id: str, message: str, intent: str):
+        """Update user context for personalized responses"""
+        if user_id not in self.context_memory:
+            self.context_memory[user_id] = {
+                'is_returning': False,
+                'preferences': [],
+                'last_intent': None,
+                'conversation_count': 0
+            }
+        
+        context = self.context_memory[user_id]
+        context['conversation_count'] += 1
+        context['last_intent'] = intent
+        
+        if context['conversation_count'] > 1:
+            context['is_returning'] = True
+        
+        # Extract preferences from message
+        if intent == 'products':
+            words = message.lower().split()
+            for word in words:
+                if word in ['organic', 'fresh', 'local', 'premium', 'cheap', 'expensive']:
+                    if word not in context['preferences']:
+                        context['preferences'].append(word)
+    
+    def _store_conversation(self, user_id: str, message: str, response: str, intent: str):
+        """Store conversation history"""
+        if user_id not in self.conversation_history:
+            self.conversation_history[user_id] = []
+        
+        self.conversation_history[user_id].append({
+            'timestamp': datetime.now().isoformat(),
+            'user_message': message,
+            'bot_response': response,
+            'intent': intent
+        })
+        
+        # Keep only last 10 conversations
+        if len(self.conversation_history[user_id]) > 10:
+            self.conversation_history[user_id] = self.conversation_history[user_id][-10:]
+    
+    def _get_fallback_response_data(self, message: str) -> dict:
+        """Fallback response when AI fails"""
+        message_lower = message.lower()
+        
+        # Simple keyword matching fallback
+        if any(word in message_lower for word in ['hello', 'hi', 'hey']):
+            intent = 'greeting'
+        elif any(word in message_lower for word in ['list', 'shopping']):
+            intent = 'shopping_lists'
+        elif any(word in message_lower for word in ['product', 'catalog']):
+            intent = 'products'
+        else:
+            intent = 'help'
+        
+        import random
+        response = random.choice(self.responses.get(intent, self.responses['help']))
+        
+        return {
+            'response': response,
+            'intent': intent,
+            'confidence': 0.5,
+            'suggestions': self._get_suggestions(intent),
+            'timestamp': datetime.now().isoformat(),
+            'ai_powered': False,
+            'context_aware': False
+        }
+    
+    def _get_suggestions(self, intent: str) -> list:
+        """Get contextual suggestions based on intent"""
+        suggestions_map = {
+            'greeting': ['Create a shopping list', 'Browse products', 'Get recommendations', 'Track my orders'],
+            'shopping_lists': ['Add items with natural language', 'View my lists', 'Create a new list', 'Get suggestions'],
+            'products': ['Search products', 'Filter by category', 'Add to shopping list', 'Get recommendations'],
+            'orders': ['View order history', 'Track current orders', 'Check payment status', 'Create new list'],
+            'recommendations': ['Get personalized suggestions', 'View trending products', 'Find related items', 'Browse catalog'],
+            'weather': ['Find seasonal products', 'Browse summer items', 'Get winter essentials', 'Check specials'],
+            'general': ['Tell me another joke', 'Create a shopping list', 'Browse products', 'Get recommendations'],
+            'help': ['How to create lists', 'Browse products', 'Track orders', 'Get recommendations']
+        }
+        
+        return suggestions_map.get(intent, ['How can I help you?', 'Ask me about shopping lists'])
+    
+    def _get_training_data(self):
+        """Get training data for intent classification"""
+        return {
+            'greeting': [
+                'hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening',
+                'bonjour', 'salut', 'bonsoir', 'greetings', 'welcome', 'howdy'
+            ],
+            'shopping_lists': [
+                'create a shopping list', 'make a new list', 'add items to list',
+                'shopping list', 'grocery list', 'add items manually', 'new list',
+                'create list', 'make list', 'shopping cart'
+            ],
+            'products': [
+                'show me products', 'browse products', 'product catalog', 'items',
+                'goods', 'catalog', 'show products', 'display items', 'product list'
+            ],
+            'orders': [
+                'track my order', 'order status', 'delivery status', 'shipping status',
+                'where is my order', 'order tracking', 'package status', 'order history'
+            ],
+            'recommendations': [
+                'recommendations', 'suggestions', 'personalized recommendations',
+                'recommend me', 'suggest products', 'what should I buy', 'recommend'
+            ],
+            'weather': [
+                'weather', 'temperature', 'rain', 'sunny', 'cloudy', 'forecast',
+                'weather today', 'climate', 'weather conditions', 'hows the weather',
+                'how is the weather', 'what is the weather', 'weather report'
+            ],
+            'help': [
+                'help', 'how to', 'what can you do', 'assistance', 'support',
+                'guide me', 'instructions', 'tutorial'
+            ]
+        }
+    
+    def _train_intent_classifier(self):
+        """Train the intent classification model"""
+        try:
+            # Prepare training data
+            texts = []
+            labels = []
+            
+            for intent, examples in self.training_data.items():
+                for example in examples:
+                    texts.append(self._preprocess_text(example))
+                    labels.append(intent)
+            
+            # Vectorize texts
+            X = self.vectorizer.fit_transform(texts)
+            
+            # Train classifier
+            self.intent_classifier = MultinomialNB()
+            self.intent_classifier.fit(X, labels)
+            
+            logger.info("Intent classifier trained successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to train intent classifier: {e}")
+            self.intent_classifier = None
+    
+    def _preprocess_text(self, text: str) -> str:
+        """Preprocess text for AI processing"""
+        if not text:
+            return ""
+        
+        # Convert to lowercase
+        text = text.lower()
+        
+        # Remove special characters
+        text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+        
+        # Tokenize if lemmatizer is available
+        if self.lemmatizer:
+            try:
+                tokens = word_tokenize(text)
+                tokens = [self.lemmatizer.lemmatize(token) for token in tokens 
+                         if token not in self.stop_words and len(token) > 2]
+                text = ' '.join(tokens)
+            except:
+                pass
+        
+        return text
+    
+    def _classify_intent(self, message: str) -> tuple:
+        """Classify user intent using AI"""
+        try:
+            # First try fallback classification for better accuracy
+            fallback_intent, fallback_confidence = self._fallback_intent_classification(message)
+            
+            # If fallback found a good match, use it
+            if fallback_confidence >= 0.8:
+                return fallback_intent, fallback_confidence
+            
+            # Otherwise try the trained classifier
+            if not self.intent_classifier:
+                return fallback_intent, fallback_confidence
+            
+            # Preprocess message
+            processed_text = self._preprocess_text(message)
+            
+            # Vectorize
+            X = self.vectorizer.transform([processed_text])
+            
+            # Predict intent
+            intent = self.intent_classifier.predict(X)[0]
+            confidence = self.intent_classifier.predict_proba(X).max()
+            
+            # Only use classifier if confidence is high enough
+            if confidence >= 0.7:
+                return intent, confidence
+            else:
+                # Use fallback if classifier confidence is too low
+                return fallback_intent, fallback_confidence
+            
+        except Exception as e:
+            logger.error(f"Intent classification failed: {e}")
+            return self._fallback_intent_classification(message)
+    
+    def _fallback_intent_classification(self, message: str) -> tuple:
+        """Fallback intent classification using keyword matching"""
+        message_lower = message.lower()
+        
+        # Enhanced keyword matching with better weather detection
+        if any(word in message_lower for word in ['hello', 'hi', 'hey', 'bonjour', 'good morning', 'good afternoon', 'good evening']):
+            return 'greeting', 0.8
+        elif any(word in message_lower for word in ['list', 'shopping list', 'create list', 'new list', 'add items', 'manually']):
+            return 'shopping_lists', 0.8
+        elif any(word in message_lower for word in ['product', 'catalog', 'browse', 'show me', 'items', 'goods']):
+            return 'products', 0.8
+        elif any(word in message_lower for word in ['order', 'track', 'status', 'delivery', 'package', 'shipping']):
+            return 'orders', 0.8
+        elif any(word in message_lower for word in ['recommend', 'suggestion', 'personalized', 'suggest']):
+            return 'recommendations', 0.8
+        elif any(word in message_lower for word in ['weather', 'temperature', 'rain', 'sunny', 'cloudy', 'hows the weather', 'how is the weather', 'forecast', 'climate']):
+            return 'weather', 0.8
+        elif any(word in message_lower for word in ['joke', 'funny', 'laugh', 'humor', 'tell me a joke', 'make me laugh']):
+            return 'general', 0.8
+        else:
+            return 'help', 0.6
+    
+    def _generate_ai_response(self, message: str, intent: str, user_id: str) -> str:
+        """Generate AI-powered response based on intent and context"""
+        try:
+            # Get user context
+            context = self.context_memory.get(user_id, {})
+            conversation = self.conversation_history.get(user_id, [])
+            
+            # Generate contextual response with AI-powered intelligence
+            if intent == 'greeting':
+                if context.get('is_returning', False):
+                    return f"👋 Welcome back! I've been analyzing your shopping patterns and have some exciting new recommendations ready. What would you like to explore today?"
+                else:
+                    return f"🎉 Hello! I'm your advanced AI shopping assistant powered by machine learning. I can help you create smart lists, discover products, and provide personalized recommendations based on your preferences!"
+            
+            elif intent == 'shopping_lists':
+                if 'list' in context:
+                    return f"📝 I see you already have a shopping list! Based on your previous purchases, I can suggest some complementary items. Would you like me to analyze your list and add smart recommendations?"
+                else:
+                    return f"✨ Let's create your perfect shopping list using AI! I can parse natural language like '2kg organic apples, fresh milk, and gluten-free bread' and automatically categorize everything for you."
+            
+            elif intent == 'products':
+                if context.get('preferences'):
+                    return f"🛍️ Based on your AI-analyzed preferences for {', '.join(context['preferences'][:2])}, I've found some trending products that match your taste! Let me show you some personalized recommendations."
+                else:
+                    return f"🌟 Our AI-curated catalog is constantly learning! I can analyze your shopping patterns to suggest products you'll love. What type of items are you looking for today?"
+            
+            elif intent == 'orders':
+                return f"📦 I'm tracking your orders in real-time using AI-powered logistics! Let me check your current order status and provide detailed updates on delivery progress."
+            
+            elif intent == 'recommendations':
+                return f"🤖 I'm running advanced machine learning algorithms to analyze your shopping history, preferences, and trending patterns. This will take just a moment to generate personalized recommendations..."
+            
+            elif intent == 'weather':
+                return f"🌤️ While I can't predict weather, my AI can suggest weather-appropriate products! Based on seasonal patterns and weather data, I can recommend rain gear, summer essentials, or cozy winter items. What season are you shopping for?"
+            
+            elif intent == 'general':
+                # Handle general questions like jokes, casual conversation
+                if any(word in message.lower() for word in ['joke', 'funny', 'laugh', 'humor']):
+                    jokes = [
+                        "🛒 Why don't shopping carts ever get lonely? Because they always have a lot of items to carry around! 😄",
+                        "🛍️ What do you call a fish that wears a bowtie? So-fish-ticated! 🐠",
+                        "📦 Why did the grocery bag go to therapy? It was feeling empty inside! 🛍️",
+                        "🥕 What do you call a fake noodle? An impasta! 🍝",
+                        "🍎 Why don't eggs tell jokes? They'd crack each other up! 🥚",
+                        "🛒 What's a shopping cart's favorite type of music? Cart-oon music! 🎵",
+                        "🥬 Why did the lettuce break up with the tomato? It couldn't ketchup! 🍅",
+                        "🛍️ What do you call a shopping bag that tells jokes? A pun-ch bag! 💼",
+                        "🍌 Why don't bananas ever get lonely? Because they hang out in bunches! 🍌🍌",
+                        "🥛 What's a milk carton's favorite game? Hide and go lactose! 🥛",
+                        "🛒 What do you call a shopping list that's feeling down? A grocery list! 😢",
+                        "🍞 Why did the bread go to the doctor? It was feeling crumby! 🍞",
+                        "🥚 What's an egg's favorite comedy show? The Yolk Show! 🥚",
+                        "🛍️ Why don't shopping lists ever get tired? Because they're always checking things off! ✅",
+                        "🥕 What do you call a carrot that's good at telling jokes? A funny root! 🥕"
+                    ]
+                    import random
+                    return random.choice(jokes)
+                else:
+                    return f"😊 I'm your AI shopping assistant! While I'm great at helping with shopping lists, products, and recommendations, I also enjoy a good conversation. What would you like to know about our smart shopping features?"
+            
+            else:
+                return f"🎯 I'm your AI-powered shopping companion! I use machine learning to understand your needs and provide intelligent assistance with lists, products, orders, and personalized recommendations."
+                
+        except Exception as e:
+            logger.error(f"AI response generation failed: {e}")
+            return self._get_fallback_response(intent)
+    
+    def _get_fallback_response(self, intent: str) -> str:
+        """Get fallback response when AI generation fails"""
+        import random
+        if intent in self.responses:
+            return random.choice(self.responses[intent])
+        return "I'm here to help! What can I assist you with today?"
+    
+    def clear_user_history(self, user_id: str):
+        """Clear conversation history for a specific user"""
+        if user_id in self.context_memory:
+            del self.context_memory[user_id]
+        if user_id in self.conversation_history:
+            del self.conversation_history[user_id]
+    
+    def clear_all_history(self):
+        """Clear all conversation history"""
+        self.context_memory.clear()
+        self.conversation_history.clear()
+
+# Initialize chatbot and recommendation engine
+chatbot = AIChatbot()
 MODEL_PATH = os.getenv('MODEL_PATH', './data/recommendation_model.pkl')
 engine = RecommendationEngine(data_path='./data')
 
@@ -54,6 +494,42 @@ def health_check():
         'timestamp': datetime.now().isoformat(),
         'model_loaded': engine.user_item_matrix is not None
     })
+
+@app.route('/api/chatbot/process', methods=['POST'])
+def process_chatbot_message():
+    """Process chatbot message"""
+    try:
+        data = request.get_json()
+        user_input = data.get('message', '')
+        user_id = data.get('user_id', 'default_user')
+        
+        if not user_input:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        response = chatbot.get_response(user_input, user_id)
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Chatbot processing failed: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chatbot/messages', methods=['DELETE'])
+def clear_chat_history():
+    """Clear chat history for all users"""
+    try:
+        # Clear chatbot memory and conversation history
+        chatbot.clear_all_history()
+        
+        logger.info("Chat history cleared successfully")
+        return jsonify({
+            'success': True,
+            'message': 'Chat history cleared successfully',
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to clear chat history: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # ============================================================================

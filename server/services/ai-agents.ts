@@ -298,13 +298,7 @@ export class RecommendationAgent {
 export class ChatbotAgent {
   /**
    * Process user message and generate response
-   *
-   * TODO: Replace this mock implementation with real chatbot:
-   * - OpenAI GPT API for natural conversations
-   * - Anthropic Claude API for advanced reasoning
-   * - Rasa framework for custom chatbot
-   * - Dialogflow for Google integration
-   * - Custom fine-tuned models
+   * Now integrated with Python-trained chatbot model
    *
    * @param userId - User ID
    * @param message - User message
@@ -321,20 +315,19 @@ export class ChatbotAgent {
     );
 
     try {
-      // Save user message
-      await storage.createMessage({
-        userId: userId as any,
-        content: message,
-        isBot: false,
-      });
+      // Import the chatbot service
+      const { chatbotService } = await import('./chatbot-service');
+      
+      // Use the new chatbot service
+      return await chatbotService.processMessage(userId, message, history);
 
-      // Mock implementation: rule-based responses
-      // TODO: Replace with actual AI chatbot
-      let response =
-        "I'm a placeholder chatbot. Replace me with your AI implementation!";
-      const suggestions: string[] = [];
-
+    } catch (error) {
+      console.error('[Chatbot Agent] Error:', error);
+      
+      // Fallback to simple responses
       const lowerMessage = message.toLowerCase();
+      let response: string;
+      const suggestions: string[] = [];
 
       // FAQ matching
       const faqs = await storage.getAllFaqs();
@@ -436,12 +429,6 @@ export class ChatbotAgent {
       return {
         response,
         suggestions: suggestions.length > 0 ? suggestions : undefined,
-      };
-    } catch (error) {
-      console.error("[Chatbot Agent] Error processing message:", error);
-      return {
-        response: "I'm sorry, I encountered an error. Please try again later.",
-        suggestions: ["Contact support", "Try again"],
       };
     }
   }

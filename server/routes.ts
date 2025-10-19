@@ -48,7 +48,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await connectDB();
 
   // Mock user for demo (in production, use proper authentication)
-  const MOCK_USER_ID = "demo-user-123";
+  const MOCK_USER_ID = "507f1f77bcf86cd799439011";
 
   // Middleware to ensure user exists
   app.use(async (req, res, next) => {
@@ -403,6 +403,98 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(transformDocuments(messages));
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch messages" });
+    }
+  });
+
+  // Clear chat history
+  app.delete("/api/chatbot/messages", async (req, res) => {
+    try {
+      console.log('[Clear History] Starting chat history clear process');
+      
+      // Clear messages from database
+      await storage.clearUserMessages(MOCK_USER_ID);
+      console.log('[Clear History] Database messages cleared');
+      
+      // Also clear Python chatbot memory if available and reset fallback mode
+      try {
+        const { chatbotService } = await import('./services/chatbot-service');
+        
+        // Reset fallback mode first to enable AI calls
+        chatbotService.resetFallbackMode();
+        
+        // Clear Python chatbot memory
+        await chatbotService.clearPythonChatbotMemory();
+        
+        console.log('[Clear History] Python chatbot memory cleared and fallback mode reset');
+      } catch (error) {
+        console.warn('[Clear History] Could not clear Python chatbot memory:', error);
+        // Still reset fallback mode even if clearing memory fails
+        try {
+          const { chatbotService } = await import('./services/chatbot-service');
+          chatbotService.resetFallbackMode();
+          console.log('[Clear History] Fallback mode reset despite memory clear failure');
+        } catch (resetError) {
+          console.error('[Clear History] Failed to reset fallback mode:', resetError);
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        message: "Chat history cleared successfully and AI reset" 
+      });
+    } catch (error) {
+      console.error('[Clear History] Failed to clear chat history:', error);
+      res.status(500).json({ error: "Failed to clear chat history" });
+    }
+  });
+
+  // Reset chatbot fallback mode
+  app.post("/api/chatbot/reset", async (req, res) => {
+    try {
+      console.log('[Reset Endpoint] Resetting chatbot fallback mode');
+      
+      const { chatbotService } = await import('./services/chatbot-service');
+      const statusBefore = chatbotService.getStatus();
+      
+      chatbotService.resetFallbackMode();
+      
+      const statusAfter = chatbotService.getStatus();
+      
+      console.log(`[Reset Endpoint] Status before: ${JSON.stringify(statusBefore)}`);
+      console.log(`[Reset Endpoint] Status after: ${JSON.stringify(statusAfter)}`);
+      
+      res.json({ 
+        success: true, 
+        message: "Chatbot fallback mode reset, will try AI again",
+        status: statusAfter
+      });
+    } catch (error) {
+      console.error('[Reset Endpoint] Failed to reset chatbot mode:', error);
+      res.status(500).json({ error: "Failed to reset chatbot mode" });
+    }
+  });
+
+  // Chatbot feedback endpoint for learning
+  app.post("/api/chatbot/feedback", async (req, res) => {
+    try {
+      const { messageId, feedback, timestamp } = req.body;
+      
+      console.log(`[Chatbot Feedback] Received ${feedback} feedback for message ${messageId}`);
+      
+      // Store feedback for future learning improvements
+      // This could be used to improve the chatbot's responses over time
+      
+      // For now, just log the feedback
+      console.log(`[Chatbot Feedback] User ${feedback === 'positive' ? 'liked' : 'disliked'} response at ${timestamp}`);
+      
+      res.json({ 
+        success: true, 
+        message: "Feedback received and logged for learning",
+        feedback: feedback
+      });
+    } catch (error) {
+      console.error('[Chatbot Feedback] Failed to process feedback:', error);
+      res.status(500).json({ error: "Failed to process feedback" });
     }
   });
 

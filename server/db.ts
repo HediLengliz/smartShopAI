@@ -1,12 +1,6 @@
 // MongoDB connection setup with Mongoose
 import mongoose from 'mongoose';
 
-if (!process.env.MONGODB_URI) {
-  throw new Error(
-    "MONGODB_URI must be set. Please set your MongoDB connection string in the environment variables.",
-  );
-}
-
 // Connection options
 const options = {
   maxPoolSize: 10, // Maintain up to 10 socket connections
@@ -22,6 +16,17 @@ export const connectDB = async (): Promise<void> => {
   if (isConnected) {
     console.log('MongoDB already connected');
     return;
+  }
+
+  // Debug: Log environment variables
+  console.log('Environment variables check:');
+  console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'SET' : 'NOT SET');
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+
+  if (!process.env.MONGODB_URI) {
+    throw new Error(
+      "MONGODB_URI must be set. Please set your MongoDB connection string in the environment variables.",
+    );
   }
 
   try {
