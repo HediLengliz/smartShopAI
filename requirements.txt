@@ -1,0 +1,17 @@
+# This file lists the Python dependencies for the AI agent.
+# In a real project, you would include libraries for machine learning,
+# such as TensorFlow, PyTorch, or scikit-learn.
+
+# For data handling and basic ML
+pandas
+scikit-learn
+joblib
+
+# For building a more advanced model (e.g., a transformer)
+# You would uncomment one of the following lines:
+# tensorflow
+# torch
+
+# For serving the model via an API
+flask
+flask-cors
