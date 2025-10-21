@@ -1,0 +1,21 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <title>Products</title>
+</head>
+<body>
+<h1>Products</h1>
+<form method="get" action="/ui/products">
+    <input type="text" name="q" th:value="${query}" placeholder="Search..." />
+    <button type="submit">Search</button>
+</form>
+<ul>
+    <li th:each="p : ${products}">
+        <a th:href="@{'/ui/product/' + ${p.id}}" th:text="${p.name}"></a>
+        - <span th:text="${p.price}"></span>
+    </li>
+</ul>
+</body>
+</html>
+

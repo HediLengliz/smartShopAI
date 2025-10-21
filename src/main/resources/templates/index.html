@@ -1,0 +1,20 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="utf-8" />
+    <title>SmartShop - Home</title>
+</head>
+<body>
+<h1>Welcome to SmartShop</h1>
+<p><a href="/swagger-ui.html">Swagger UI</a> | <a href="/ui/products">Browse products</a></p>
+<h2>Latest</h2>
+<ul>
+    <li th:each="p : ${latest}"><a th:href="@{'/ui/product/' + ${p.id}}" th:text="${p.name}"></a> - <span th:text="${p.price}"></span></li>
+</ul>
+<h2>Trending</h2>
+<ul>
+    <li th:each="p : ${trending}"><a th:href="@{'/ui/product/' + ${p.id}}" th:text="${p.name}"></a> - <span th:text="${p.price}"></span></li>
+</ul>
+</body>
+</html>
+
