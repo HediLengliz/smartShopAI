@@ -77,29 +77,23 @@ class ChatbotService {
       console.log('[Chatbot Service] Has shopping intent:', hasShoppingIntent);
       console.log('[Chatbot Service] Is conversational:', isConversationalResponse);
       
-      // If message contains products OR is a conversational response OR has shopping intent, use enhanced fallback
-      if (entities.products.length > 0 || isConversationalResponse || hasShoppingIntent) {
-        console.log('[Chatbot Service] Message contains products, is conversational, or has shopping intent - using enhanced entity recognition');
-        response = await this.getEnhancedFallbackResponse(message, userId);
-      } else {
-        // For other messages, try Python chatbot first
-        if (!this.fallbackMode) {
-          try {
-            response = await this.callPythonChatbot(userId, message);
-            
-            // Validate response quality
-            if (!response || !response.response || response.response.trim().length === 0) {
-              throw new Error('Empty or invalid response from Python chatbot');
-            }
-            
-          } catch (error) {
-            console.warn('[Chatbot Service] Python chatbot unavailable, using enhanced fallback:', error);
-            this.fallbackMode = true;
-            response = await this.getEnhancedFallbackResponse(message, userId);
+      // Always try Python chatbot first for better AI responses
+      if (!this.fallbackMode) {
+        try {
+          response = await this.callPythonChatbot(userId, message);
+          
+          // Validate response quality
+          if (!response || !response.response || response.response.trim().length === 0) {
+            throw new Error('Empty or invalid response from Python chatbot');
           }
-        } else {
+          
+        } catch (error) {
+          console.warn('[Chatbot Service] Python chatbot unavailable, using enhanced fallback:', error);
+          this.fallbackMode = true;
           response = await this.getEnhancedFallbackResponse(message, userId);
         }
+      } else {
+        response = await this.getEnhancedFallbackResponse(message, userId);
       }
 
       // Update context with bot message
@@ -754,7 +748,7 @@ class ChatbotService {
     try {
       const messages = await storage.getUserMessages(userId);
       return messages.map(msg => ({
-        id: msg.id,
+        id: msg._id.toString(),
         content: msg.content,
         isBot: msg.isBot,
         timestamp: msg.timestamp

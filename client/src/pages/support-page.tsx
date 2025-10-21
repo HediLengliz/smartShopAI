@@ -152,41 +152,57 @@ export default function SupportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <div className="text-center mb-6">
-            <div className="relative inline-block mb-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-muted/20 to-background relative overflow-hidden">
+      {/* Background decorative elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-primary/10 to-purple-500/10 rounded-full blur-3xl"></div>
+        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-purple-500/10 to-primary/10 rounded-full blur-3xl"></div>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-br from-primary/5 to-purple-500/5 rounded-full blur-3xl"></div>
+      </div>
+      
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-12">
+          <div className="text-center mb-8">
+            <div className="relative inline-block mb-6">
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/30 via-purple-500/30 to-primary/30 rounded-full blur-2xl animate-pulse"></div>
               <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-purple-500/20 to-primary/20 rounded-full blur-xl"></div>
-              <div className="relative p-4 bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10 rounded-full border border-primary/20">
-                <Brain className="h-12 w-12 text-primary animate-pulse" />
+              <div className="relative p-6 bg-gradient-to-r from-primary/15 via-purple-500/15 to-primary/15 rounded-full border border-primary/30 shadow-2xl backdrop-blur-sm">
+                <Brain className="h-16 w-16 text-primary animate-pulse" />
               </div>
             </div>
-            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent mb-2" data-testid="text-support-title">
+            <h1 className="text-5xl font-bold tracking-tight bg-gradient-to-r from-primary via-purple-600 to-primary bg-clip-text text-transparent mb-4 animate-pulse" data-testid="text-support-title">
               SmartShopAI Assistant
           </h1>
-            <p className="text-muted-foreground text-lg">
-              Your intelligent shopping companion powered by advanced AI
-            </p>
-          </div>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <Badge variant="secondary" className="flex items-center gap-1 px-3 py-1">
-              <Cpu className="h-3 w-3" />
-              Neural Network
+            <p className="text-muted-foreground text-xl max-w-2xl mx-auto leading-relaxed">
+              Your intelligent shopping companion powered by advanced AI technology. 
+              <br />
+              <span className="text-primary font-medium">Ask me anything about shopping, products, or recommendations!</span>
+          </p>
+        </div>
+
+          {/* Enhanced feature badges */}
+          <div className="flex items-center justify-center gap-4 flex-wrap mb-8">
+            <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gradient-to-r from-primary/10 to-purple-500/10 border border-primary/20 shadow-lg">
+              <Cpu className="h-4 w-4 text-primary animate-spin" />
+              Neural Network AI
             </Badge>
-            <Badge variant="outline" className="flex items-center gap-1 px-3 py-1 border-primary/30">
-              <Wand2 className="h-3 w-3" />
-              Magic AI
+            <Badge variant="outline" className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-primary/30 shadow-lg hover:bg-primary/5 transition-colors">
+              <Wand2 className="h-4 w-4 text-primary" />
+              Smart Responses
             </Badge>
-            <Badge variant="secondary" className="flex items-center gap-1 px-3 py-1">
-              <Zap className="h-3 w-3" />
+            <Badge variant="secondary" className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-gradient-to-r from-purple-500/10 to-primary/10 border border-purple-500/20 shadow-lg">
+              <Zap className="h-4 w-4 text-purple-600 animate-pulse" />
               Instant Response
+            </Badge>
+            <Badge variant="outline" className="flex items-center gap-2 px-4 py-2 text-sm font-medium border-primary/30 shadow-lg hover:bg-primary/5 transition-colors">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Spell Correction
             </Badge>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <Card className="lg:col-span-2 border-2 border-primary/20 shadow-2xl bg-gradient-to-br from-background to-muted/20">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <Card className="lg:col-span-2 border-2 border-primary/20 shadow-2xl bg-gradient-to-br from-background/95 to-muted/30 backdrop-blur-sm">
             <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-purple-500/5 border-b">
               <CardTitle className="flex items-center gap-3">
                 <div className="relative">
@@ -321,8 +337,8 @@ export default function SupportPage() {
                                 <Cpu className="h-3 w-3 text-primary animate-spin" />
                               </div>
                             </div>
-                          </div>
                         </div>
+                      </div>
                       )}
                       
                       {/* Scroll anchor */}
@@ -370,26 +386,26 @@ export default function SupportPage() {
                     </div>
                     
                     {/* Input Field */}
-                    <Input
+                  <Input
                       placeholder="Ask your AI assistant anything..."
-                      value={chatMessage}
-                      onChange={(e) => setChatMessage(e.target.value)}
+                    value={chatMessage}
+                    onChange={(e) => setChatMessage(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
-                      data-testid="input-chat-message"
+                    data-testid="input-chat-message"
                       className="flex-1 pl-10 pr-12 h-12 border-2 border-primary/20 focus:border-primary/50 transition-all bg-gradient-to-r from-background to-muted/20 rounded-xl"
                       disabled={sendMessageMutation.isPending}
-                    />
+                  />
                     
                     {/* Send Button - Always visible, inside input field */}
-                    <Button
+                  <Button
                       size="sm"
                       className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 p-0 bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-600/90 shadow-lg disabled:opacity-50"
-                      onClick={handleSendMessage}
-                      disabled={sendMessageMutation.isPending || !chatMessage.trim()}
-                    >
+                    onClick={handleSendMessage}
+                    disabled={sendMessageMutation.isPending || !chatMessage.trim()}
+                  >
                       <ArrowUp className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  </Button>
+                </div>
                   {/* Input Instructions and Features */}
                   <div className="flex items-center justify-between mt-3 text-xs">
                     <div className="flex items-center gap-4 text-muted-foreground">
@@ -416,13 +432,19 @@ export default function SupportPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2">
-                <div className="p-1.5 bg-primary/10 rounded-lg">
-                <Star className="h-5 w-5 text-primary" />
+          <Card className="shadow-2xl bg-gradient-to-br from-background/95 to-muted/20 backdrop-blur-sm border border-primary/10">
+            <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-purple-500/5 border-b">
+              <CardTitle className="flex items-center gap-3">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-primary/20 rounded-lg blur-sm"></div>
+                  <div className="relative p-2 bg-gradient-to-r from-primary/20 to-purple-500/20 rounded-lg">
+                    <Star className="h-6 w-6 text-primary" />
+                  </div>
                 </div>
-                <span>Share Your Experience</span>
+                <div className="flex-1">
+                  <span className="text-lg font-semibold">Share Your Experience</span>
+                  <p className="text-xs text-muted-foreground">Help us improve our AI assistant</p>
+                </div>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -476,14 +498,20 @@ export default function SupportPage() {
           </Card>
         </div>
 
-        <Card className="shadow-lg">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-1.5 bg-primary/10 rounded-lg">
-              <HelpCircle className="h-5 w-5 text-primary" />
+        <Card className="shadow-2xl bg-gradient-to-br from-background/95 to-muted/20 backdrop-blur-sm border border-primary/10">
+          <CardHeader className="pb-3 bg-gradient-to-r from-primary/5 to-purple-500/5 border-b">
+            <CardTitle className="flex items-center gap-3">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 rounded-lg blur-sm"></div>
+                <div className="relative p-2 bg-gradient-to-r from-primary/20 to-purple-500/20 rounded-lg">
+                  <HelpCircle className="h-6 w-6 text-primary" />
+                </div>
               </div>
-              <span>Frequently Asked Questions</span>
-              <Badge variant="outline" className="ml-auto">
+              <div className="flex-1">
+                <span className="text-lg font-semibold">Frequently Asked Questions</span>
+                <p className="text-xs text-muted-foreground">Get quick answers to common questions</p>
+              </div>
+              <Badge variant="outline" className="border-primary/30 shadow-lg">
                 {faqs?.length || 0} Questions
               </Badge>
             </CardTitle>
@@ -499,28 +527,31 @@ export default function SupportPage() {
                 ))}
               </div>
             ) : faqs && faqs.length > 0 ? (
-              <Accordion type="single" collapsible className="w-full space-y-2">
+              <Accordion type="single" collapsible className="w-full space-y-3">
                 {faqs.map((faq, index) => (
-                  <AccordionItem key={faq.id} value={`faq-${index}`} className="border rounded-lg px-4">
+                  <AccordionItem key={faq.id} value={`faq-${index}`} className="border border-primary/20 rounded-xl px-4 bg-gradient-to-r from-background/50 to-muted/20 shadow-lg hover:shadow-xl transition-shadow">
                     <AccordionTrigger 
-                      className="text-left hover:no-underline py-4"
+                      className="text-left hover:no-underline py-4 hover:bg-primary/5 rounded-lg transition-colors"
                       data-testid={`button-faq-${faq.id}`}
                     >
-                      <span className="font-medium">{faq.question}</span>
+                      <span className="font-medium text-foreground">{faq.question}</span>
                     </AccordionTrigger>
-                    <AccordionContent className="text-muted-foreground pb-4 leading-relaxed">
+                    <AccordionContent className="text-muted-foreground pb-4 leading-relaxed bg-gradient-to-br from-muted/10 to-background/50 rounded-lg px-2 py-2">
                       {faq.answer}
                     </AccordionContent>
                   </AccordionItem>
                 ))}
               </Accordion>
             ) : (
-              <div className="text-center py-12">
-                <div className="p-4 bg-primary/10 rounded-full w-fit mx-auto mb-4">
-                  <HelpCircle className="h-12 w-12 text-primary" />
+              <div className="text-center py-16">
+                <div className="relative inline-block mb-6">
+                  <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-purple-500/20 to-primary/20 rounded-full blur-xl"></div>
+                  <div className="relative p-6 bg-gradient-to-r from-primary/10 via-purple-500/10 to-primary/10 rounded-full border border-primary/20">
+                    <HelpCircle className="h-16 w-16 text-primary animate-pulse" />
+                  </div>
                 </div>
-                <h3 className="font-semibold text-lg mb-2">No FAQs Yet</h3>
-                <p className="text-muted-foreground">Check back soon for helpful answers!</p>
+                <h3 className="font-bold text-2xl mb-3 bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">No FAQs Yet</h3>
+                <p className="text-muted-foreground text-lg max-w-md mx-auto">Check back soon for helpful answers and common questions!</p>
               </div>
             )}
           </CardContent>

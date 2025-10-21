@@ -1,4 +1,5 @@
-import mongoose, { Schema, Document, Types } from 'mongoose';
+import mongoose from 'mongoose';
+const { Schema, Document, Types } = mongoose;
 
 // ============================================================================
 // TYPE DEFINITIONS

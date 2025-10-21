@@ -22,8 +22,18 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
+# Fuzzy string matching for spell correction
+from fuzzywuzzy import fuzz, process
+
+# MongoDB
+from pymongo import MongoClient
+from dotenv import load_dotenv
+
 # Import recommendation engine
 from recommendation_model import RecommendationEngine
+
+# Load environment variables from parent directory
+load_dotenv('../.env')
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +54,14 @@ class AIChatbot:
         self.intent_classifier = None
         self.context_memory = {}
         self.conversation_history = {}
+        
+        # Initialize MongoDB connection
+        self.mongo_client = None
+        self.db = None
+        self._connect_to_database()
+        
+        # Initialize spell correction
+        self.vocabulary = self._build_vocabulary()
         
         # Initialize NLP components
         try:
@@ -123,6 +141,15 @@ class AIChatbot:
     def get_response(self, message: str, user_id: str = 'default_user') -> dict:
         """Generate AI-powered response"""
         try:
+            # Correct spelling errors in the message
+            original_message = message
+            corrected_message = self._correct_spelling(message)
+            
+            # Log spelling corrections
+            if corrected_message != original_message:
+                logger.info(f"Original: '{original_message}' -> Corrected: '{corrected_message}'")
+                message = corrected_message  # Use corrected message for processing
+            
             # Classify intent using AI
             intent, confidence = self._classify_intent(message)
             
@@ -238,6 +265,126 @@ class AIChatbot:
         }
         
         return suggestions_map.get(intent, ['How can I help you?', 'Ask me about shopping lists'])
+    
+    def _connect_to_database(self):
+        """Connect to MongoDB database"""
+        try:
+            mongodb_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/intellicart')
+            logger.info(f"MongoDB URI: {mongodb_uri}")
+            self.mongo_client = MongoClient(mongodb_uri, serverSelectionTimeoutMS=5000)
+            # Test connection
+            self.mongo_client.server_info()
+            self.db = self.mongo_client['intellicart']
+            logger.info("✓ Connected to MongoDB database")
+        except Exception as e:
+            logger.warning(f"MongoDB connection failed: {e}")
+            self.mongo_client = None
+            self.db = None
+    
+    def _get_products_from_db(self, category=None, max_price=None, limit=10):
+        """Get products from database with optional filtering"""
+        if self.db is None:
+            logger.warning("Database connection is None, returning empty list")
+            return []
+        
+        try:
+            query = {}
+            if category:
+                query['category'] = {'$regex': category, '$options': 'i'}
+            if max_price:
+                query['price'] = {'$lte': float(max_price)}
+            
+            logger.info(f"Querying database with: {query}")
+            products = list(self.db.products.find(query).limit(limit))
+            logger.info(f"Found {len(products)} products from database")
+            
+            # Convert ObjectId to string for JSON serialization
+            for product in products:
+                product['_id'] = str(product['_id'])
+            
+            return products
+        except Exception as e:
+            logger.error(f"Error fetching products from database: {e}")
+            return []
+    
+    def _format_product_recommendations(self, products, category_name=None, price_limit=None):
+        """Format product recommendations for chatbot response"""
+        if products is None or len(products) == 0:
+            return "Sorry, I couldn't find any products matching your criteria."
+        
+        formatted_products = []
+        for product in products[:4]:  # Show max 4 products
+            name = product.get('name', 'Unknown Product')
+            price = product.get('price', 0)
+            formatted_products.append(f"{name} (${price:.2f})")
+        
+        if category_name and price_limit:
+            return f"🥛 Here are {category_name.lower()} products under ${price_limit}: {', '.join(formatted_products)}. All perfect for your budget!"
+        elif category_name:
+            return f"🥗 Perfect! For {category_name.lower()}, I recommend: {', '.join(formatted_products)}. These are all great choices!"
+        else:
+            return f"🛍️ Here are some great products: {', '.join(formatted_products)}. Check them out!"
+    
+    def _build_vocabulary(self):
+        """Build vocabulary from product names and common shopping terms"""
+        vocabulary = set()
+        
+        # Common shopping terms
+        shopping_terms = [
+            'dairy', 'milk', 'cheese', 'butter', 'eggs', 'yogurt',
+            'vegetables', 'tomatoes', 'carrots', 'onions', 'potatoes', 'spinach',
+            'meat', 'chicken', 'beef', 'pork', 'protein',
+            'fruits', 'apples', 'bananas', 'oranges',
+            'bread', 'bakery', 'baked', 'pasta', 'rice', 'cereal',
+            'beverages', 'drink', 'juice', 'coffee', 'tea',
+            'pantry', 'cooking', 'kitchen', 'grocery',
+            'shopping', 'list', 'cart', 'buy', 'purchase',
+            'price', 'cheap', 'expensive', 'budget', 'under', 'over',
+            'organic', 'fresh', 'frozen', 'canned'
+        ]
+        
+        # Add product names from database if available
+        if self.db is not None:
+            try:
+                products = self.db.products.find({}, {'name': 1})
+                for product in products:
+                    # Extract words from product names
+                    name_words = product['name'].lower().split()
+                    vocabulary.update(name_words)
+            except Exception as e:
+                logger.warning(f"Could not load product names for vocabulary: {e}")
+        
+        # Add common shopping terms
+        vocabulary.update(shopping_terms)
+        
+        return list(vocabulary)
+    
+    def _correct_spelling(self, text):
+        """Correct spelling errors in text using fuzzy matching"""
+        if not text:
+            return text
+        
+        words = text.lower().split()
+        corrected_words = []
+        
+        for word in words:
+            # Skip very short words or numbers
+            if len(word) <= 2 or word.isdigit():
+                corrected_words.append(word)
+                continue
+            
+            # Find best match in vocabulary
+            best_match = process.extractOne(word, self.vocabulary, scorer=fuzz.ratio)
+            
+            # Only correct if similarity is high enough (>= 70%)
+            if best_match and best_match[1] >= 70:
+                corrected_words.append(best_match[0])
+                logger.info(f"Spell corrected: '{word}' -> '{best_match[0]}' (confidence: {best_match[1]}%)")
+            else:
+                corrected_words.append(word)
+        
+        corrected_text = ' '.join(corrected_words)
+        return corrected_text
     
     def _get_training_data(self):
         """Get training data for intent classification"""
@@ -359,14 +506,16 @@ class AIChatbot:
     
     def _fallback_intent_classification(self, message: str) -> tuple:
         """Fallback intent classification using keyword matching"""
-        message_lower = message.lower()
+        # Use corrected spelling for better classification
+        corrected_message = self._correct_spelling(message)
+        message_lower = corrected_message.lower()
         
         # Enhanced keyword matching with better weather detection
         if any(word in message_lower for word in ['hello', 'hi', 'hey', 'bonjour', 'good morning', 'good afternoon', 'good evening']):
             return 'greeting', 0.8
         elif any(word in message_lower for word in ['list', 'shopping list', 'create list', 'new list', 'add items', 'manually']):
             return 'shopping_lists', 0.8
-        elif any(word in message_lower for word in ['product', 'catalog', 'browse', 'show me', 'items', 'goods']):
+        elif any(word in message_lower for word in ['product', 'catalog', 'browse', 'show me', 'items', 'goods', 'vegetables', 'salad', 'pasta', 'dairy', 'milk', 'bread', 'apples', 'tomatoes', 'chicken', 'beef', 'eggs', 'meat', 'fruits', 'bakery', 'beverages', 'pantry']):
             return 'products', 0.8
         elif any(word in message_lower for word in ['order', 'track', 'status', 'delivery', 'package', 'shipping']):
             return 'orders', 0.8
@@ -400,9 +549,77 @@ class AIChatbot:
                     return f"✨ Let's create your perfect shopping list using AI! I can parse natural language like '2kg organic apples, fresh milk, and gluten-free bread' and automatically categorize everything for you."
             
             elif intent == 'products':
-                if context.get('preferences'):
+                # Check for specific cooking scenarios
+                message_lower = message.lower()
+                
+                if 'salad' in message_lower or 'vegetables' in message_lower:
+                    # Get vegetable products from database
+                    products = self._get_products_from_db(category='Vegetables', limit=4)
+                    if products:
+                        return self._format_product_recommendations(products, "vegetables")
+                    else:
+                        return f"🥗 Perfect! For a fresh salad, I recommend: Tomatoes ($2.49), Spinach ($2.99), Carrots ($2.29), and Onions ($1.99). These are all under $3 and perfect for salads!"
+                
+                elif 'pasta' in message_lower or 'italian' in message_lower:
+                    # Get pasta-related products from database
+                    pasta_products = self._get_products_from_db(category='Pantry', limit=2) # Pasta is in Pantry
+                    tomato_products = self._get_products_from_db(category='Vegetables', limit=2) # Tomatoes are vegetables
+                    all_products = pasta_products + tomato_products
+                    if all_products:
+                        return self._format_product_recommendations(all_products, "Italian pasta")
+                    else:
+                        return f"🍝 Great choice! For Italian pasta, you'll need: Pasta - Spaghetti ($1.99), Tomatoes ($2.49), Onions ($1.99), and Olive Oil. I can also suggest Parmesan cheese and garlic for authentic flavor!"
+                
+                elif 'dairy' in message_lower and ('under' in message_lower or '$' in message_lower):
+                    # Extract price limit from message
+                    price_match = re.search(r'\$?(\d+)', message_lower)
+                    price_limit = int(price_match.group(1)) if price_match else 5
+                    
+                    # Get dairy products from database
+                    products = self._get_products_from_db(category='Dairy', max_price=price_limit, limit=4)
+                    logger.info(f"Dairy query returned {len(products)} products for price limit ${price_limit}")
+                    if products:
+                        response = self._format_product_recommendations(products, "dairy", price_limit)
+                        logger.info(f"Using database response: {response[:50]}...")
+                        return response
+                    else:
+                        logger.warning(f"No dairy products found under ${price_limit}, returning no results message")
+                        return f"🥛 Sorry, I couldn't find any dairy products under ${price_limit}. The cheapest dairy products we have are: Butter ($4.29), Whole Milk ($4.49), Cheese ($4.79), and Eggs ($4.99)."
+                
+                elif context.get('preferences'):
                     return f"🛍️ Based on your AI-analyzed preferences for {', '.join(context['preferences'][:2])}, I've found some trending products that match your taste! Let me show you some personalized recommendations."
                 else:
+                    # Try to extract category and price from message for generic queries
+                    # Extract price limit
+                    price_match = re.search(r'\$?(\d+)', message_lower)
+                    price_limit = int(price_match.group(1)) if price_match else None
+                    
+                    # Try to find products by category keywords
+                    category_keywords = {
+                        'Meat': ['meat', 'beef', 'chicken', 'pork', 'protein'],
+                        'Fruits': ['fruit', 'apple', 'banana', 'orange'],
+                        'Bakery': ['bread', 'bakery', 'baked'],
+                        'Beverages': ['drink', 'beverage', 'juice', 'coffee'],
+                        'Pantry': ['pasta', 'rice', 'cereal', 'pantry']
+                    }
+                    
+                    found_category = None
+                    for category, keywords in category_keywords.items():
+                        if any(keyword in message_lower for keyword in keywords):
+                            found_category = category
+                            break
+                    
+                    # Query database with found category and price
+                    if found_category or price_limit:
+                        products = self._get_products_from_db(
+                            category=found_category,
+                            max_price=price_limit,
+                            limit=4
+                        )
+                        if products:
+                            category_name = found_category.capitalize() if found_category else "products"
+                            return self._format_product_recommendations(products, category_name, price_limit)
+                    
                     return f"🌟 Our AI-curated catalog is constantly learning! I can analyze your shopping patterns to suggest products you'll love. What type of items are you looking for today?"
             
             elif intent == 'orders':
