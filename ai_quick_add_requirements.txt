@@ -1,0 +1,8 @@
+# Requirements for AI Quick Add Feature
+# Install with: pip install -r ai_quick_add_requirements.txt
+
+motor>=3.3.0  # Async MongoDB driver
+rapidfuzz>=3.5.0  # Fast fuzzy string matching
+pymongo>=4.6.0  # MongoDB driver (required by motor)
+
+

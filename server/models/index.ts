@@ -113,7 +113,6 @@ const UserSchema = new Schema<IUser>({
   email: {
     type: String,
     required: [true, 'Email is required'],
-    unique: true,
     lowercase: true,
     trim: true,
     match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']
@@ -431,7 +430,7 @@ const NlpLogSchema = new Schema<INlpLog>({
 // ============================================================================
 
 // User indexes
-UserSchema.index({ email: 1 });
+UserSchema.index({ email: 1 }, { unique: true });
 UserSchema.index({ createdAt: -1 });
 
 // List indexes
@@ -533,4 +532,3 @@ export type CreateMessageData = Omit<IMessage, '_id' | 'timestamp'>;
 export type CreateFeedbackData = Omit<IFeedback, '_id' | 'createdAt'>;
 export type CreatePaymentData = Omit<IPayment, '_id' | 'createdAt'>;
 export type CreateNlpLogData = Omit<INlpLog, '_id' | 'timestamp'>;
-

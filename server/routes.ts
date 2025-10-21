@@ -48,17 +48,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await connectDB();
 
   // Mock user for demo (in production, use proper authentication)
-  const MOCK_USER_ID = "demo-user-123";
+  let MOCK_USER_ID: string;
 
-  // Middleware to ensure user exists
+  // Middleware to ensure user exists and get the user ID
   app.use(async (req, res, next) => {
-    const user = await storage.getUserByEmail("demo@example.com");
+    let user = await storage.getUserByEmail("demo@example.com");
     if (!user) {
-      await storage.createUser({
+      user = await storage.createUser({
         name: "Demo User",
         email: "demo@example.com",
       } as any);
     }
+    MOCK_USER_ID = user._id.toString();
     next();
   });
 
@@ -186,6 +187,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to delete item" });
     }
   });
+// AI Quick Add endpoint - FIXED VERSION
+app.post("/api/lists/:id/quick-add", async (req, res) => {
+  try {
+    const { inputText, threshold = 60 } = req.body;
+    const listId = req.params.id;
+
+    console.log('Quick Add Request:', { listId, inputText, threshold });
+
+    if (!inputText || !inputText.trim()) {
+      return res.status(400).json({ error: "Input text is required" });
+    }
+
+    const { spawn } = await import('node:child_process');
+    
+    // Use positional arguments (not flags)
+    const python = spawn('python', [
+      'ai_quick_add_wrapper.py',
+      inputText.trim(),        // sys.argv[1] - input_text
+      listId,                  // sys.argv[2] - list_id  
+      threshold.toString()     // sys.argv[3] - threshold
+    ]);
+
+    let result = '';
+    let errorOutput = '';
+
+    python.stdout.on('data', (data) => { 
+      result += data.toString(); 
+      console.log('Python stdout:', data.toString());
+    });
+    
+    python.stderr.on('data', (data) => { 
+      errorOutput += data.toString();
+      console.error('Python stderr:', data.toString());
+    });
+
+    python.on('close', (code) => {
+      console.log('Python process exited with code:', code);
+      console.log('Python result:', result);
+      console.log('Python errors:', errorOutput);
+
+      if (code === 0) {
+        try {
+          // Clean the result - extract JSON from potential debug output
+          const cleanResult = result.trim();
+          // Fix: Remove the 's' flag and use [\s\S] instead to match across lines
+          const jsonMatch = cleanResult.match(/\{[\s\S]*\}/);
+          
+          if (jsonMatch) {
+            const parsedResult = JSON.parse(jsonMatch[0]);
+            
+            if (parsedResult.error) {
+              return res.status(400).json({ error: parsedResult.error });
+            }
+            
+            res.json(parsedResult);
+          } else {
+            res.status(500).json({ 
+              error: 'No valid JSON response from AI', 
+              details: cleanResult 
+            });
+          }
+        } catch (parseError) {
+          console.error('JSON parse error:', parseError);
+          res.status(500).json({ 
+            error: 'Failed to parse AI response', 
+            details: result,
+            rawError: errorOutput
+          });
+        }
+      } else {
+        res.status(500).json({ 
+          error: 'AI Quick Add failed', 
+          details: errorOutput || 'Python script execution failed',
+          exitCode: code
+        });
+      }
+    });
+
+    python.on('error', (error) => {
+      console.error('Failed to start Python process:', error);
+      res.status(500).json({ 
+        error: 'Python process failed to start',
+        details: error.message
+      });
+    });
+
+  } catch (error) {
+    console.error('Quick add route error:', error);
+    res.status(500).json({ 
+      error: 'Failed to process quick add request',
+      details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 
   // NLP Parse endpoint - AI INTEGRATION POINT
   app.post("/api/nlp/parse", async (req, res) => {

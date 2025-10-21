@@ -25,6 +25,7 @@ import {
   type IPayment,
   type INlpLog,
 } from "./models";
+import { Types } from "mongoose";
 import type {
   CreateUserData,
   CreateListData,
@@ -131,7 +132,7 @@ export class DatabaseStorage implements IStorage {
   // ============================================================================
 
   async getUserLists(userId: string): Promise<IList[]> {
-    const results = await List.find({ userId }).sort({ createdAt: -1 }).lean();
+    const results = await List.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).lean();
     return results as any;
   }
 
@@ -237,7 +238,7 @@ export class DatabaseStorage implements IStorage {
   // ============================================================================
 
   async getUserOrders(userId: string): Promise<IOrder[]> {
-    const results = await Order.find({ userId }).sort({ createdAt: -1 }).lean();
+    const results = await Order.find({ userId: new Types.ObjectId(userId) }).sort({ createdAt: -1 }).lean();
     return results as any;
   }
 
@@ -304,7 +305,7 @@ export class DatabaseStorage implements IStorage {
   // ============================================================================
 
   async getUserMessages(userId: string): Promise<IMessage[]> {
-    const results = await Message.find({ userId })
+    const results = await Message.find({ userId: new Types.ObjectId(userId) })
       .sort({ timestamp: -1 })
       .lean();
     return results as any;
@@ -364,7 +365,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNlpLogs(userId: string): Promise<INlpLog[]> {
-    const results = await NlpLog.find({ userId })
+    const results = await NlpLog.find({ userId: new Types.ObjectId(userId) })
       .sort({ timestamp: -1 })
       .lean();
     return results as any;
